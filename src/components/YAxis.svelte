@@ -1,128 +1,145 @@
 <script lang="ts">
-    import { store } from '../lib/store.svelte';
-    import { CONFIG } from '../lib/types';
+    import { layoutStore } from '../lib/stores/layout.svelte';
+    import { CONFIG } from '../lib/config/constants';
 
-    let dragTarget = $state<'min' | 'max' | null>(null);
+    // --- INSTÄLLNINGAR FÖR YTA ---
+    // Ändra dessa för att flytta grafens arbetsområde vertikalt
+    const topPadding = 15;    // Avstånd från titellisten ner till max-värdet
+    const bottomPadding = 15; // Avstånd från kalenderns kant upp till min-värdet
+
+    let isDragging = $state<'min' | 'max' | null>(null);
     let startY = 0;
     let startVal = 0;
-    let currentSensitivity = 0;
 
-    const labels = $derived.by(() => {
-        const { chartH, graphMin, graphMax } = store;
-        const range = graphMax - graphMin;
-        const availableH = Math.max(0, chartH - 45);
+    let hasManualScale = $derived(layoutStore.manualMin !== null || layoutStore.manualMax !== null);
+
+    let ticks = $derived([0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+        const val = layoutStore.graphMin + (pct * (layoutStore.graphMax - layoutStore.graphMin));
+        // --- BERÄKNING AV POSITION ---
+        // 1. Vi utgår från den totala chartH
+        // 2. Vi drar av padding för att få den "användbara" höjden
+        const usableHeight = layoutStore.chartH - topPadding - bottomPadding;
         
-        return [0, 1, 2, 3, 4].map(i => {
-            const pct = i / 4;
-            const val = graphMin + (range * pct);
-            const y = (chartH - 5) - (pct * availableH);
-            
-            let type: 'min' | 'max' | 'auto' | null = null;
-            if (i === 0) type = 'min';
-            if (i === 4) type = 'max';
-            if (i === 2) type = 'auto';
-
-            return { val: Math.round(val * 10) / 10, y, type };
-        });
-    });
-
-    function handleStart(e: MouseEvent | TouchEvent, type: 'min' | 'max' | 'auto' | null) {
-        if (!type) return;
-        if (type === 'auto') { store.autoScale(); return; }
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
+        // 3. Vi räknar ut Y-positionen (0% är botten, 100% är toppen)
+        const yPos = (layoutStore.chartH - bottomPadding) - (pct * usableHeight);
         
-        dragTarget = type;
+        return {
+            pct,
+            val: Math.round(val),
+            y: yPos + CONFIG.titleBarHeight, // Addera titellistens höjd för global position
+            isMiddle: i === 2,
+            isInteractive: i === 0 || i === 4
+        };
+    }));
+
+    function startDrag(e: MouseEvent | TouchEvent, type: 'min' | 'max') {
+        e.preventDefault(); e.stopPropagation(); 
+        isDragging = type;
         const clientY = (window.TouchEvent && e instanceof TouchEvent) ? e.touches[0].clientY : (e as MouseEvent).clientY;
         startY = clientY;
-        startVal = type === 'min' ? store.graphMin : store.graphMax;
-        
-        const range = store.graphMax - store.graphMin;
-        currentSensitivity = Math.max(0.1, range / 150);
+        startVal = type === 'min' ? layoutStore.graphMin : layoutStore.graphMax;
+
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchend', stopDrag);
+        window.addEventListener('mouseup', stopDrag);
     }
 
-    function handleMove(clientY: number) {
-        if (!dragTarget) return;
+    function onMove(e: MouseEvent | TouchEvent) {
+        if (!isDragging) return;
+        const clientY = (window.TouchEvent && e instanceof TouchEvent) ? e.touches[0].clientY : (e as MouseEvent).clientY;
         const deltaPx = startY - clientY; 
-        const deltaVal = deltaPx * currentSensitivity;
-        const newVal = startVal + deltaVal;
-        const gap = 1;
+        const range = layoutStore.graphMax - layoutStore.graphMin;
+        const pxPerValue = layoutStore.chartH / (range || 1);
+        const valDelta = deltaPx / (pxPerValue || 1);
 
-        if (dragTarget === 'min') {
-            store.graphMin = newVal;
-            if (store.graphMin >= store.graphMax - gap) store.graphMax = store.graphMin + gap;
+        if (isDragging === 'max') {
+            layoutStore.manualMax = Math.max(layoutStore.graphMin + 1, Math.round(startVal + valDelta));
         } else {
-            store.graphMax = newVal;
-            if (store.graphMax <= store.graphMin + gap) store.graphMin = store.graphMax - gap;
+            layoutStore.manualMin = Math.min(layoutStore.graphMax - 1, Math.round(startVal + valDelta));
         }
     }
 
-    function handleEnd() { dragTarget = null; }
+    function stopDrag() {
+        isDragging = null;
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('touchend', stopDrag);
+        window.removeEventListener('mouseup', stopDrag);
+    }
+    
+    function reset() {
+        layoutStore.manualMin = null;
+        layoutStore.manualMax = null;
+    }
 </script>
 
-<svelte:window 
-    onmousemove={(e) => dragTarget && handleMove(e.clientY)}
-    onmouseup={handleEnd}
-    ontouchmove={(e) => dragTarget && handleMove(e.touches[0].clientY)}
-    ontouchend={handleEnd}
-/>
-
-{#if dragTarget}
-    <div class="drag-overlay" role="presentation" onmouseup={handleEnd} ontouchend={handleEnd}></div>
-{/if}
-
-<div class="y-axis-layer" style:height="{store.chartH}px" style:top="{CONFIG.titleBarHeight}px">
-    {#each labels as label}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+{#if layoutStore.showGraph}
+<div class="y-axis-layer">
+    {#each ticks as tick, i}
         <div 
-            class="y-label {label.type ? 'is-interactive' : ''} {dragTarget === label.type ? 'is-dragging' : ''}" 
-            style:top="{label.y}px"
-            role={label.type ? "slider" : undefined}
-            aria-valuenow={label.type ? label.val : undefined}
-            tabindex={label.type ? 0 : -1}
-            
-            onmousedown={(e) => handleStart(e, label.type)}
-            ontouchstart={(e) => handleStart(e, label.type)}
-        >
-            <span class="val-text">{label.val}</span>
-            
-            {#if label.type === 'min' || label.type === 'max'}
-                <span class="icon">↕</span>
-            {:else if label.type === 'auto'}
-                <span class="icon">⟳</span>
-            {/if}
-        </div>
+            class="grid-line" 
+            style:top="{tick.y}px"
+            style:opacity={tick.pct === 0 || tick.pct === 1 ? 0.2 : 0.05}
+        ></div>
+
+        {#if tick.isMiddle && hasManualScale}
+            <button 
+                class="axis-label interactive clickable" 
+                style:top="{tick.y}px"
+                onclick={reset}
+                aria-label="Återställ zoom"
+            >
+                <span class="label-text">{tick.val}</span>
+                <span class="icon">↺</span>
+            </button>
+        {:else}
+            <div 
+                class="axis-label"
+                style:top="{tick.y}px"
+                class:interactive={tick.isInteractive}
+                ontouchstart={(e) => (tick.pct===0 ? startDrag(e, 'min') : tick.pct===1 ? startDrag(e, 'max') : null)}
+                onmousedown={(e) => (tick.pct===0 ? startDrag(e, 'min') : tick.pct===1 ? startDrag(e, 'max') : null)}
+                role="button"
+                tabindex="-1"
+            >
+                <span class="label-text">{tick.val}</span>
+                {#if tick.isInteractive}
+                    <span class="icon">↕</span>
+                {/if}
+            </div>
+        {/if}
     {/each}
 </div>
+{/if}
 
 <style>
-    .drag-overlay { position: fixed; inset: 0; z-index: 9999; cursor: ns-resize; touch-action: none; }
-    .y-axis-layer { position: fixed; left: 0; width: 100%; z-index: 500; pointer-events: none; }
-
-    .y-label {
-        position: absolute; left: 0;
-        display: flex; align-items: center; gap: 4px;
-        
-        /* ÄNDRAT: Större greppyta */
-        padding: 8px 10px; 
-        min-width: 48px;
-        
-        transform: translateY(-50%);
-        font-size: 11px; font-weight: 600; color: #00639b; 
-        background: rgba(255, 255, 255, 0.75); 
-        backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-        border: 1px solid rgba(0, 0, 0, 0.05); border-left: none;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        border-radius: 0 6px 6px 0;
-        transition: color 0.2s;
-        pointer-events: none; user-select: none; touch-action: none;
+    .y-axis-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+    .grid-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--text-main); transform: translateY(0.5px); }
+    
+    .axis-label {
+        position: absolute; left: 4px; transform: translateY(-50%);
+        pointer-events: auto; user-select: none;
+        display: flex; align-items: center; gap: 3px; 
+        font-family: inherit; font-size: 10px; font-weight: 600; color: var(--text-muted);
+        background: rgba(255,255,255,0.75); backdrop-filter: blur(2px);
+        padding: 2px 5px; border-radius: 4px; border: none; margin: 0; 
     }
 
-    .y-label.is-interactive { pointer-events: auto; cursor: ns-resize; color: #00639b; }
-    .y-label.is-interactive:nth-child(3) { cursor: pointer; }
-    .y-label.is-interactive:hover { background: rgba(255, 255, 255, 0.95); z-index: 600; }
-    .y-label.is-dragging { background: rgba(255, 255, 255, 1); color: #00639b; z-index: 10000; }
-    .val-text { pointer-events: none; }
-    .icon { font-size: 10px; opacity: 0.5; pointer-events: none; margin-left: 2px;}
-    .y-label::after { content: ""; position: absolute; left: 100%; width: 100vw; height: 1px; border-bottom: 1px dashed rgba(0, 0, 0, 0.08); pointer-events: none; }
+    :global(body.dark-mode) .axis-label { background: rgba(30,30,30,0.8); }
+
+    .axis-label.interactive {
+        font-weight: 700;
+        background: rgba(255,255,255,0.9); box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    :global(body.dark-mode) .axis-label.interactive { background: rgba(50,50,50,0.95); }
+    
+    .axis-label.interactive { cursor: ns-resize; }
+    .axis-label.clickable { cursor: pointer; }
+
+    .icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 100%; line-height: 1; font-size: 12px; 
+        font-weight: normal; margin-top: -1px; opacity: 0.7;
+    }
 </style>

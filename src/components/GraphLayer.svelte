@@ -1,63 +1,66 @@
 <script lang="ts">
-    import { store } from '../lib/store.svelte';
-    import { CONFIG } from '../lib/types';
+    import { layoutStore } from '../lib/stores/layout.svelte';
+    import { CONFIG } from '../lib/config/constants';
 
-    // Beräkna koordinater för grafen
     let points = $derived.by(() => {
-        const { chartH, graphMin, graphMax } = store;
-        const range = graphMax - graphMin;
-        const availableH = Math.max(0, chartH - 45); // 40px top padding + 5px bottom
-        const margin = (CONFIG.stride * 0.25) / 2; // För staplar
-
-        // Skippa de kolumner som är gömda till vänster (colsToHide)
-        const visibleStats = store.processedData.stats.slice(store.colsToHide);
+        const visibleStats = layoutStore.visuals.stats.slice(layoutStore.colsToHide);
+        
+        // Marginal för staplar så de inte nuddar varandra
+        const margin = 2; 
 
         return visibleStats.map((stat, i) => {
             if (!stat.hasData) return null;
             
-            const normalized = Math.max(0, Math.min(1, (stat.val - graphMin) / range));
-            const y = (chartH - 5) - (normalized * availableH);
+            const y = layoutStore.getY(stat.val);
             const xBase = (i * CONFIG.stride);
-            
+            const yBottom = layoutStore.chartH - 5; 
+
             return {
                 xLine: xBase + (CONFIG.stride / 2),
+                
+                // Centrerad stapel
                 xBar: xBase + margin,
+                barWidth: CONFIG.stride - (margin * 2),
+                
                 y,
-                height: normalized * availableH,
+                height: Math.max(2, yBottom - y), // Minst 2px hög så den syns
                 val: stat.val
             };
         });
     });
 
     let linePath = $derived.by(() => {
-        if (store.graphType !== 'line') return '';
-        const validPoints = points.filter(p => p !== null);
-        if (validPoints.length === 0) return '';
-        return `M ${validPoints[0].xLine},${validPoints[0].y} ` + 
-               validPoints.slice(1).map(p => `L ${p!.xLine},${p!.y}`).join(' ');
+        if (layoutStore.graphType !== 'line') return '';
+        const valid = points.filter(p => p !== null);
+        if (!valid.length) return '';
+        return `M ${valid[0].xLine},${valid[0].y} ` + 
+               valid.slice(1).map(p => `L ${p!.xLine},${p!.y}`).join(' ');
     });
 </script>
 
-<g class="graph-layer">
-    {#if store.graphType === 'line'}
-        <path d={linePath} fill="none" stroke="#00639b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-        {#each points as p}
-            {#if p}
-                <circle cx={p.xLine} cy={p.y} r="3.5" fill="#fff" stroke="#00639b" stroke-width="2.5" />
-            {/if}
-        {/each}
-    {:else}
-        {#each points as p}
-            {#if p}
-                <rect 
-                    x={p.xBar} 
-                    y={p.y} 
-                    width={CONFIG.stride * 0.75} 
-                    height={Math.max(1, p.height)} 
-                    fill="rgba(0, 99, 155, 0.5)" 
-                    rx="3" 
-                />
-            {/if}
-        {/each}
-    {/if}
-</g>
+{#if layoutStore.showGraph}
+    <g class="graph-layer">
+        {#if layoutStore.graphType === 'line'}
+            <path d={linePath} fill="none" stroke="#00639b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            {#each points as p}
+                {#if p}
+                    <circle cx={p.xLine} cy={p.y} r="3.5" fill="#fff" stroke="#00639b" stroke-width="2.5" />
+                {/if}
+            {/each}
+        {:else}
+            {#each points as p}
+                {#if p}
+                    <rect 
+                        x={p.xBar} 
+                        y={p.y} 
+                        width={p.barWidth} 
+                        height={p.height} 
+                        fill="#00639b" 
+                        fill-opacity="0.6"
+                        rx="2" 
+                    />
+                {/if}
+            {/each}
+        {/if}
+    </g>
+{/if}

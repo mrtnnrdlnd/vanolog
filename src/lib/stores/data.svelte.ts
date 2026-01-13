@@ -1,0 +1,87 @@
+import { api } from '../api';
+import type { CalendarData, ApiDataItem } from '../types';
+import { uiStore } from './ui.svelte';
+
+class DataStore {
+    data = $state<CalendarData[]>([]);
+    todayIndex = $state(0);
+
+    async init() {
+        uiStore.loading = true;
+        try {
+            const raw = await api.getSheetData();
+            this.processApiData(raw);
+        } catch (e) {
+            console.error("Load failed", e);
+            uiStore.syncStatus = 'error';
+        } finally {
+            uiStore.loading = false;
+        }
+    }
+
+    private processApiData(rawItems: ApiDataItem[]) {
+        // Skapa Map för snabb uppslagning
+        const dataMap = new Map(rawItems.map(item => [`${item.year}-${item.monthIdx}-${item.day}`, item.val]));
+        
+        // Sortering och datum-fyllnad (samma logik som förut, men inkapslad)
+        let sorted = rawItems.sort((a,b) => 
+            new Date(a.year, a.monthIdx, a.day).getTime() - new Date(b.year, b.monthIdx, b.day).getTime()
+        );
+        
+        if(!sorted.length) {
+            const now = new Date();
+            sorted = [{year: now.getFullYear(), monthIdx: 0, day: 1, val: 0, isToday: false}];
+        }
+
+        const viewStart = new Date(sorted[0].year, sorted[0].monthIdx, 1);
+        const viewEnd = new Date(sorted[sorted.length-1].year, sorted[sorted.length-1].monthIdx + 1, 0);
+        const totalDays = Math.ceil((viewEnd.getTime() - viewStart.getTime()) / (1000 * 3600 * 24)) + 1;
+        const offset = (viewStart.getDay() + 6) % 7;
+        
+        const newData: CalendarData[] = new Array(offset + totalDays);
+        const todayStr = new Date().toDateString();
+
+        // 1. Fyll placeholders
+        for (let i = 0; i < offset; i++) {
+            newData[i] = { val: null, isToday: false, isDisabled: true, isSunday: false, monthIdx: 0, year: 0 };
+        }
+
+        // 2. Fyll dagar
+        for (let i = 0; i < totalDays; i++) {
+            const d = new Date(viewStart); 
+            d.setDate(viewStart.getDate() + i);
+            const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+            const isToday = d.toDateString() === todayStr;
+            if(isToday) this.todayIndex = offset + i;
+
+            newData[offset + i] = {
+                day: d.getDate(),
+                val: dataMap.get(key) ?? null,
+                isToday,
+                isDisabled: false,
+                isSunday: d.getDay() === 0,
+                monthIdx: d.getMonth(),
+                year: d.getFullYear(),
+                dateStr: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+            };
+        }
+        this.data = newData;
+    }
+
+    async updateValue(idx: number, newVal: number | null) {
+        const item = this.data[idx];
+        if (!item || !item.dateStr) return;
+
+        item.val = newVal; // Optimistisk update
+        uiStore.syncStatus = 'working';
+        
+        try {
+            await api.updateValue(item.dateStr, newVal);
+            uiStore.syncStatus = 'idle';
+        } catch (e) {
+            uiStore.syncStatus = 'error';
+        }
+    }
+}
+
+export const dataStore = new DataStore();

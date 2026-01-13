@@ -1,72 +1,124 @@
 <script lang="ts">
-    import { store } from '../lib/store.svelte';
-    import { CONFIG } from '../lib/types'; // Se till att CONFIG importeras korrekt
+    import { dataStore } from '../lib/stores/data.svelte';
+    import { layoutStore } from '../lib/stores/layout.svelte';
+    import { uiStore } from '../lib/stores/ui.svelte';
+    import { CONFIG } from '../lib/config/constants';
     import GraphLayer from './GraphLayer.svelte';
+    import { getHeatmapColor } from '../lib/theme'; 
+
+    let scroller: HTMLElement;
     
-    // Enkel hjälpfunktion för cell-färg (om du inte lagt den i utils)
-    function getCellStyle(val: number | null, min: number, max: number): string {
-        if (val === null) return '#fff';
-        const normalized = Math.max(0, Math.min(1, (val - min) / (max - min)));
-        return `hsl(35, ${normalized * 100}%, ${100 - (normalized * 60)}%)`;
+    // Ankare för resize-logik
+    let anchorIndex = $state(0);
+
+    // Initial scroll
+    $effect(() => {
+        if (scroller && !uiStore.loading && dataStore.todayIndex > 0) {
+            if (!uiStore.scrolledToToday) {
+                const startCol = Math.floor(dataStore.todayIndex / layoutStore.rows);
+                const centerPos = (startCol * CONFIG.stride) - (scroller.clientWidth / 2) + (CONFIG.stride / 2);
+                scroller.scrollLeft = Math.max(0, centerPos);
+                uiStore.scrolledToToday = true;
+                anchorIndex = dataStore.todayIndex;
+            }
+        }
+    });
+
+    // Resize-logik (följ ankaret)
+    $effect(() => {
+        const r = layoutStore.rows; 
+        if (scroller && layoutStore.isResizing && anchorIndex > 0) {
+            const newCol = Math.floor(anchorIndex / r);
+            scroller.scrollLeft = newCol * CONFIG.stride;
+        }
+    });
+
+    function handleScroll() {
+        if (!scroller) return;
+        if (layoutStore.isResizing) return;
+        const currentLeftCol = Math.round(scroller.scrollLeft / CONFIG.stride);
+        const firstVisibleIndex = currentLeftCol * layoutStore.rows;
+        anchorIndex = firstVisibleIndex;
     }
 
     function handleCellClick(idx: number) {
-        // Kontrollera att indexet finns och inte är inaktiverat
-        if (!store.data[idx] || store.data[idx].isDisabled) return;
-        
-        console.log("Cell klickad:", idx); // Debug: Kolla konsolen om inget händer
-        store.selectedIdx = idx;
+        if (!dataStore.data[idx] || dataStore.data[idx].isDisabled) return;
+        uiStore.openEditor(idx);
     }
-    
-    // Hitta rätt scroll-element vid mount
-    let scroller: HTMLElement;
-    $effect(() => {
-        if (scroller && !store.loading && store.todayIndex > 0 && scroller.scrollLeft === 0) {
-            const centerPos = (store.todayIndex / store.rows) * CONFIG.stride;
-            scroller.scrollLeft = Math.max(0, centerPos - (scroller.clientWidth / 2));
-        }
-    });
 </script>
 
-<div class="scroll-view" bind:this={scroller}>
+<div 
+    class="scroll-view" 
+    bind:this={scroller}
+    onscroll={handleScroll} 
+>
     <div 
         class="grid-container" 
-        style:margin-left="{store.centerOffset}px"
-        style:margin-right="{store.centerOffset}px"
-        style:width="{store.totalWidth}px"
-        style:height="{store.screenH}px"
+        style:margin-left="{layoutStore.centerOffset}px"
+        style:margin-right="{layoutStore.centerOffset}px"
+        style:width="{layoutStore.totalWidth}px"
+        style:height="{layoutStore.screenH}px"
     >
         <svg style:width="100%" style:height="100%">
-            {#each store.processedData.monthBounds as b}
-                <path d={b.pathD} class="month-bg m-{b.m}" />
-            {/each}
+            {#if layoutStore.showMonthLines}
+                {#each layoutStore.visuals.monthBounds as b}
+                    <path d={b.pathD} class="month-bg {b.m % 2 === 0 ? 'even' : 'odd'}" />
+                {/each}
+            {/if}
             <GraphLayer />
         </svg>
 
-        {#each store.processedData.monthBounds as b}
+        {#each layoutStore.visuals.monthBounds as b}
             <div 
                 class="month-marker"
-                style:transform="translate({((b.startCol + b.endCol) / 2) * CONFIG.stride}px, 0) translateX(-50%)">
-
-                {CONFIG.months[b.m]} {b.y}
+                style:top="{layoutStore.chartH + layoutStore.gridH}px"
+                style:height="{CONFIG.footerHeight}px"
+                style:transform="translate({((b.startCol + b.endCol) / 2) * CONFIG.stride}px, 0) translateX(-50%)"
+            >
+                 <span class="month-label">{CONFIG.months[b.m]} {b.y}</span>
             </div>
         {/each}
 
-        {#each store.data as d, i}
-            {@const rawCol = Math.floor(i / store.rows)}
-            {@const isHidden = (rawCol * CONFIG.stride) < store.xShift}
+        {#each dataStore.data as d, i}
+            {@const rawCol = Math.floor(i / layoutStore.rows)}
+            {@const isHidden = (rawCol * CONFIG.stride) < layoutStore.xShift}
             
             {#if !isHidden && d.day}
-                {@const row = i % store.rows}
-                {@const visualCol = rawCol - store.colsToHide}
+                {@const row = i % layoutStore.rows}
+                {@const visualCol = rawCol - layoutStore.colsToHide}
                 {@const x = (visualCol * CONFIG.stride) + (CONFIG.stride - CONFIG.boxSize)/2}
-                {@const y = store.chartH + (row * CONFIG.stride) + (CONFIG.stride - CONFIG.boxSize)/2}
-                {@const normalizedVal = d.val !== null ? (d.val - store.graphMin)/(store.graphMax - store.graphMin) : 0}
+                {@const y = layoutStore.chartH + (row * CONFIG.stride) + (CONFIG.stride - CONFIG.boxSize)/2}
+                
+                {@const norm = d.val !== null 
+                    ? ((d.val - layoutStore.graphMin) / (layoutStore.graphMax - layoutStore.graphMin)) 
+                    : 0}
+                
+                {@const textColorClass = layoutStore.showHeatmap 
+                    ? (layoutStore.darkMode 
+                        ? (norm > 0.6 ? 'is-light' : 'is-dark') 
+                        : (norm > 0.55 ? 'is-dark' : 'is-light')
+                      )
+                    : ''} 
 
                 <div 
-                    class="cell {d.isSunday ? 'is-sunday' : ''} {d.isToday ? 'is-today' : ''} {d.isDisabled ? 'is-disabled' : ''} {normalizedVal > 0.55 ? 'is-dark' : 'is-light'}"
+                    class="cell 
+                           {d.isSunday ? 'is-sunday' : ''} 
+                           {d.isToday ? 'is-today' : ''} 
+                           {d.isDisabled ? 'is-disabled' : ''} 
+                           {textColorClass}
+                           {!layoutStore.showHeatmap ? 'no-heatmap' : ''}"
+                    
                     style:transform="translate({x}px, {y}px)"
-                    style:background-color={getCellStyle(d.val, store.graphMin, store.graphMax)}
+                    
+                    style:background-color={layoutStore.showHeatmap 
+                        ? getHeatmapColor(
+                            d.val, 
+                            layoutStore.graphMin, 
+                            layoutStore.graphMax, 
+                            layoutStore.darkMode,
+                            layoutStore.heatmapHue
+                          ) 
+                        : ''}
                     
                     onclick={() => handleCellClick(i)} 
                     role="button"
@@ -78,17 +130,50 @@
             {/if}
         {/each}
 
-        {#each Array(Math.ceil(store.totalCols - store.colsToHide)) as _, i}
-            <div class="snap-guide" style:left="{i * CONFIG.stride}px"></div>
+        {#each Array(Math.ceil(layoutStore.totalCols - layoutStore.colsToHide)) as _, i}
+            <div class="snap-guide" style:left="{(i * CONFIG.stride) + (CONFIG.stride / 2)}px"></div>
         {/each}
     </div>
 </div>
 
 <style>
     .month-marker {
-        position: absolute; bottom: 0; height: 40px;
+        position: absolute; 
+        /* Top sätts inline för exakt positionering */
         display: flex; align-items: center; justify-content: center;
-        font-size: 13px; font-weight: 700; text-transform: uppercase; color: #667;
-        pointer-events: none; padding-bottom: 5px;
+        pointer-events: none; 
+        z-index: 20; 
+    }
+    
+    .month-label {
+        font-size: 13px; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+        color: var(--text-muted);
+        background: rgba(255,255,255,0.4); /* Svag bakgrund för läsbarhet om linjer korsar */
+        padding: 2px 8px;
+        border-radius: 10px;
+        backdrop-filter: blur(2px);
+    }
+    
+    /* Dark mode justering för etiketten */
+    :global(body.dark-mode) .month-label {
+        background: rgba(0,0,0,0.4);
+    }
+    
+    .month-bg {
+        stroke: var(--month-stroke);
+        stroke-width: 1.5px;
+        stroke-linejoin: round;
+    }
+
+    :global(.cell.no-heatmap) {
+        background-color: var(--bg-card) !important;
+        border: 1px solid rgba(0,0,0,0.1); 
+        color: var(--text-main) !important;
+        box-shadow: none;
+    }
+    :global(body.dark-mode .cell.no-heatmap) {
+        border-color: rgba(255,255,255,0.1);
     }
 </style>

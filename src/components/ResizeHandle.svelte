@@ -1,67 +1,110 @@
 <script lang="ts">
-    import { store } from '../lib/store.svelte';
-    import { CONFIG } from '../lib/types';
+    import { layoutStore } from '../lib/stores/layout.svelte';
+    import { CONFIG } from '../lib/config/constants';
 
-    let isDragging = $state(false);
     let startY = 0;
     let startRows = 0;
 
-    function onStart(y: number) {
-        isDragging = true;
+    function handleStart(y: number) {
         startY = y;
-        startRows = store.rows;
+        startRows = layoutStore.rows;
+        
+        // Flagga till systemet att en resize pågår
+        layoutStore.isResizing = true;
+        
+        addListeners();
     }
 
-    function onMove(y: number) {
-        if (!isDragging) return;
-        const diff = Math.round((y - startY) / CONFIG.stride);
-        let newRows = startRows - diff;
-        newRows = Math.max(CONFIG.minRows, Math.min(CONFIG.maxRows, newRows));
-        store.rows = newRows;
+    function handleMove(currentY: number) {
+        const deltaPx = currentY - startY; 
+        const deltaRows = Math.round(deltaPx / CONFIG.stride);
+        
+        const newRows = Math.max(CONFIG.minRows, Math.min(CONFIG.maxRows, startRows - deltaRows));
+        
+        if (newRows !== layoutStore.rows) {
+            layoutStore.rows = newRows;
+        }
     }
 
-    function onEnd() { isDragging = false; }
+    // VIKTIGT: Återställ flaggan när vi släpper
+    function handleEnd() {
+        layoutStore.isResizing = false;
+        cleanup();
+    }
+
+    function onTouchStart(e: TouchEvent) { 
+        e.stopPropagation();
+        handleStart(e.touches[0].clientY); 
+    }
+    
+    function onMouseDown(e: MouseEvent) { 
+        e.stopPropagation();
+        handleStart(e.clientY); 
+    }
+    
+    function onTouchMove(e: TouchEvent) { handleMove(e.touches[0].clientY); }
+    function onMouseMove(e: MouseEvent) { handleMove(e.clientY); }
+
+    function addListeners() {
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', handleEnd);
+    }
+
+    function cleanup() {
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('touchend', handleEnd);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', handleEnd);
+    }
 </script>
-
-<svelte:window 
-    ontouchmove={(e) => isDragging && onMove(e.touches[0].clientY)} 
-    ontouchend={onEnd}
-    onmousemove={(e) => isDragging && onMove(e.clientY)}
-    onmouseup={onEnd}
-/>
 
 <div 
     class="resize-handle" 
-    style:transform="translateY({CONFIG.titleBarHeight + store.chartH - 16}px)"
-    ontouchstart={(e) => { e.preventDefault(); onStart(e.touches[0].clientY); }}
-    onmousedown={(e) => onStart(e.clientY)}
-    role="slider" 
-    aria-valuenow={store.rows} 
-    tabindex="0"
+    style:top="{CONFIG.titleBarHeight + layoutStore.chartH - 20}px"
 >
-    <div class="resize-pill"></div>
+    <div 
+        class="resize-pill"
+        ontouchstart={onTouchStart}
+        onmousedown={onMouseDown}
+        role="slider"
+        aria-valuenow={layoutStore.rows}
+        tabindex="0"
+    ></div>
 </div>
 
 <style>
     .resize-handle {
-        position: fixed; 
-        left: 0; right: 0; 
-        
-        /* ÄNDRAT: Mindre höjd (var 30px förut) */
-        height: 30px; 
-        
-        top: 0; 
-        z-index: 300; 
-        cursor: ns-resize; 
-        touch-action: none;
+        position: fixed; left: 0; right: 0; height: 30px; z-index: 300;
         display: flex; align-items: center; justify-content: center;
+        background: transparent;
+        pointer-events: none;
     }
     
     .resize-pill { 
-        width: 36px; 
-        height: 4px; 
-        background: rgba(0,0,0,0.25); 
-        border-radius: 10px; 
-        box-shadow: 0 1px 2px rgba(255,255,255,0.5);
+        position: relative;
+        width: 40px; height: 4px; 
+        background: #00639b; 
+        border-radius: 10px;
+        opacity: 0.3;
+        transition: opacity 0.2s, height 0.2s;
+        cursor: grab;
+        pointer-events: auto;
+    }
+
+    .resize-pill::after {
+        content: '';
+        position: absolute;
+        top: -15px; bottom: -15px;
+        left: -15px; right: -15px;
+        z-index: 1;
+    }
+
+    .resize-pill:hover, 
+    .resize-pill:active {
+        opacity: 1;
+        height: 6px;
+        cursor: grabbing;
     }
 </style>
