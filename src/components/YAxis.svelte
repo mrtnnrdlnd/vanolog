@@ -2,31 +2,19 @@
     import { layoutStore } from '../lib/stores/layout.svelte';
     import { CONFIG } from '../lib/config/constants';
 
-    // --- INSTÄLLNINGAR FÖR YTA ---
-    // Ändra dessa för att flytta grafens arbetsområde vertikalt
-    const topPadding = 15;    // Avstånd från titellisten ner till max-värdet
-    const bottomPadding = 15; // Avstånd från kalenderns kant upp till min-värdet
-
     let isDragging = $state<'min' | 'max' | null>(null);
     let startY = 0;
     let startVal = 0;
+    let startRange = 0; // NYTT: Sparar skalan vid start för stabil beräkning
 
     let hasManualScale = $derived(layoutStore.manualMin !== null || layoutStore.manualMax !== null);
 
     let ticks = $derived([0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
         const val = layoutStore.graphMin + (pct * (layoutStore.graphMax - layoutStore.graphMin));
-        // --- BERÄKNING AV POSITION ---
-        // 1. Vi utgår från den totala chartH
-        // 2. Vi drar av padding för att få den "användbara" höjden
-        const usableHeight = layoutStore.chartH - topPadding - bottomPadding;
-        
-        // 3. Vi räknar ut Y-positionen (0% är botten, 100% är toppen)
-        const yPos = (layoutStore.chartH - bottomPadding) - (pct * usableHeight);
-        
         return {
             pct,
-            val: Math.round(val),
-            y: yPos + CONFIG.titleBarHeight, // Addera titellistens höjd för global position
+            displayVal: val.toFixed(1), 
+            y: layoutStore.getY(val) + CONFIG.titleBarHeight,
             isMiddle: i === 2,
             isInteractive: i === 0 || i === 4
         };
@@ -36,8 +24,12 @@
         e.preventDefault(); e.stopPropagation(); 
         isDragging = type;
         const clientY = (window.TouchEvent && e instanceof TouchEvent) ? e.touches[0].clientY : (e as MouseEvent).clientY;
+        
         startY = clientY;
         startVal = type === 'min' ? layoutStore.graphMin : layoutStore.graphMax;
+        
+        // VIKTIGT: Spara nuvarande range så att "valDelta" inte ändras under draget
+        startRange = Math.max(0.1, layoutStore.graphMax - layoutStore.graphMin);
 
         window.addEventListener('touchmove', onMove, { passive: false });
         window.addEventListener('mousemove', onMove);
@@ -48,15 +40,26 @@
     function onMove(e: MouseEvent | TouchEvent) {
         if (!isDragging) return;
         const clientY = (window.TouchEvent && e instanceof TouchEvent) ? e.touches[0].clientY : (e as MouseEvent).clientY;
+        
         const deltaPx = startY - clientY; 
-        const range = layoutStore.graphMax - layoutStore.graphMin;
-        const pxPerValue = layoutStore.chartH / (range || 1);
-        const valDelta = deltaPx / (pxPerValue || 1);
+        const usableHeight = layoutStore.chartH - layoutStore.graphPadding.top - layoutStore.graphPadding.bottom;
+        
+        // Använd startRange för en linjär och stabil rörelse
+        const valDelta = (deltaPx / usableHeight) * startRange;
+        const newVal = Number((startVal + valDelta).toFixed(1));
 
         if (isDragging === 'max') {
-            layoutStore.manualMax = Math.max(layoutStore.graphMin + 1, Math.round(startVal + valDelta));
-        } else {
-            layoutStore.manualMin = Math.min(layoutStore.graphMax - 1, Math.round(startVal + valDelta));
+            layoutStore.manualMax = newVal;
+            // PUSH: Om Max kommer för nära eller under Min, flytta Min neråt
+            if (newVal <= layoutStore.graphMin + 0.1) {
+                layoutStore.manualMin = Number((newVal - 0.1).toFixed(1));
+            }
+        } else if (isDragging === 'min') {
+            layoutStore.manualMin = newVal;
+            // PUSH: Om Min kommer för nära eller över Max, flytta Max uppåt
+            if (newVal >= layoutStore.graphMax - 0.1) {
+                layoutStore.manualMax = Number((newVal + 0.1).toFixed(1));
+            }
         }
     }
 
@@ -76,7 +79,7 @@
 
 {#if layoutStore.showGraph}
 <div class="y-axis-layer">
-    {#each ticks as tick, i}
+    {#each ticks as tick}
         <div 
             class="grid-line" 
             style:top="{tick.y}px"
@@ -88,9 +91,8 @@
                 class="axis-label interactive clickable" 
                 style:top="{tick.y}px"
                 onclick={reset}
-                aria-label="Återställ zoom"
             >
-                <span class="label-text">{tick.val}</span>
+                <span class="label-text">{tick.displayVal}</span>
                 <span class="icon">↺</span>
             </button>
         {:else}
@@ -103,7 +105,7 @@
                 role="button"
                 tabindex="-1"
             >
-                <span class="label-text">{tick.val}</span>
+                <span class="label-text">{tick.displayVal}</span>
                 {#if tick.isInteractive}
                     <span class="icon">↕</span>
                 {/if}
@@ -131,10 +133,10 @@
     .axis-label.interactive {
         font-weight: 700;
         background: rgba(255,255,255,0.9); box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        cursor: ns-resize;
     }
     :global(body.dark-mode) .axis-label.interactive { background: rgba(50,50,50,0.95); }
     
-    .axis-label.interactive { cursor: ns-resize; }
     .axis-label.clickable { cursor: pointer; }
 
     .icon {

@@ -32,6 +32,11 @@ class LayoutStore {
     manualMin = $state<number | null>(null);
     manualMax = $state<number | null>(null);
 
+    graphPadding = {
+        top: 15,
+        bottom: 15
+    };
+
     constructor() {
         if (typeof window !== 'undefined') {
             this.loadSettings();
@@ -157,9 +162,15 @@ class LayoutStore {
 
     getY(val: number) {
         const range = this.graphMax - this.graphMin;
-        const availableH = Math.max(0, this.chartH - 20);
-        const normalized = Math.max(0, Math.min(1, (val - this.graphMin) / range));
-        return (this.chartH - 5) - (normalized * availableH);
+        // Om min och max är samma, undvik division med noll
+        if (range <= 0) return this.chartH - this.graphPadding.bottom;
+
+        const usableHeight = this.chartH - this.graphPadding.top - this.graphPadding.bottom;
+        
+        // Här räknar vi ut positionen exakt utan avrundning
+        const normalized = (val - this.graphMin) / range;
+        
+        return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
 }
 

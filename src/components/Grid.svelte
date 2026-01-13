@@ -8,10 +8,14 @@
 
     let scroller: HTMLElement;
     
-    // Ankare för resize-logik
+    // Ankare för att behålla fokus vid resize (när rader ändras)
     let anchorIndex = $state(0);
 
-    // Initial scroll
+    // Dynamisk beräkning av klippmaskens fönster (mellan max- och min-axeln)
+    let maskY = $derived(layoutStore.graphPadding.top);
+    let maskHeight = $derived(layoutStore.chartH - layoutStore.graphPadding.top - layoutStore.graphPadding.bottom);
+
+    // Initial scroll till idag
     $effect(() => {
         if (scroller && !uiStore.loading && dataStore.todayIndex > 0) {
             if (!uiStore.scrolledToToday) {
@@ -33,12 +37,11 @@
         }
     });
 
+    // Uppdatera ankaret när man scrollar manuellt
     function handleScroll() {
-        if (!scroller) return;
-        if (layoutStore.isResizing) return;
+        if (!scroller || layoutStore.isResizing) return;
         const currentLeftCol = Math.round(scroller.scrollLeft / CONFIG.stride);
-        const firstVisibleIndex = currentLeftCol * layoutStore.rows;
-        anchorIndex = firstVisibleIndex;
+        anchorIndex = currentLeftCol * layoutStore.rows;
     }
 
     function handleCellClick(idx: number) {
@@ -60,12 +63,26 @@
         style:height="{layoutStore.screenH}px"
     >
         <svg style:width="100%" style:height="100%">
+            <defs>
+                <clipPath id="graph-clip">
+                    <rect 
+                        x="-100" 
+                        y={maskY} 
+                        width={layoutStore.totalWidth + 200} 
+                        height={maskHeight} 
+                    />
+                </clipPath>
+            </defs>
+
             {#if layoutStore.showMonthLines}
                 {#each layoutStore.visuals.monthBounds as b}
                     <path d={b.pathD} class="month-bg {b.m % 2 === 0 ? 'even' : 'odd'}" />
                 {/each}
             {/if}
-            <GraphLayer />
+
+            <g clip-path="url(#graph-clip)">
+                <GraphLayer />
+            </g>
         </svg>
 
         {#each layoutStore.visuals.monthBounds as b}
@@ -139,7 +156,6 @@
 <style>
     .month-marker {
         position: absolute; 
-        /* Top sätts inline för exakt positionering */
         display: flex; align-items: center; justify-content: center;
         pointer-events: none; 
         z-index: 20; 
@@ -150,13 +166,12 @@
         font-weight: 700; 
         text-transform: uppercase; 
         color: var(--text-muted);
-        background: rgba(255,255,255,0.4); /* Svag bakgrund för läsbarhet om linjer korsar */
+        background: rgba(255,255,255,0.4); 
         padding: 2px 8px;
         border-radius: 10px;
         backdrop-filter: blur(2px);
     }
     
-    /* Dark mode justering för etiketten */
     :global(body.dark-mode) .month-label {
         background: rgba(0,0,0,0.4);
     }
