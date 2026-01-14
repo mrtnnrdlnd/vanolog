@@ -2,28 +2,49 @@
     import { layoutStore } from '../lib/stores/layout.svelte';
     import { CONFIG } from '../lib/config/constants';
 
-    let points = $derived.by(() => {
-        const visibleStats = layoutStore.visuals.stats.slice(layoutStore.colsToHide);
-        const margin = 2; 
+    let { renderStart, renderEnd } = $props<{ renderStart: number, renderEnd: number }>();
 
-        return visibleStats.map((stat, i) => {
-            if (!stat.hasData) return null;
+    let points = $derived.by(() => {
+        const stats = layoutStore.visuals.stats;
+        const offset = layoutStore.colsToHide;
+        
+        // SÄKERHETS-FIX:
+        // Vi måste se till att 'end' aldrig går bortom vad som faktiskt finns i stats-arrayen.
+        // Eftersom vi hämtar med index [i + offset], är max tillåtna 'i' lika med (stats.length - offset).
+        const maxVisualIndex = Math.max(0, stats.length - offset);
+        
+        // Vi vill rendera en extra (+1) för linjens skull (för att binda ihop med nästa),
+        // MEN vi får inte gå över maxVisualIndex.
+        const start = Math.max(0, renderStart - 1);
+        const end = Math.min(renderEnd + 1, maxVisualIndex);
+
+        const result = [];
+
+        for (let i = start; i < end; i++) {
+            // Hämta statistik för rätt kolumn
+            const stat = stats[i + offset];
             
-            // Vi tar bort Math.max(0, Math.min(1, ...)) så att värdena 
-            // får gå utanför skalan om användaren zoomar in för mycket
+            // Extra säkerhetskoll så vi inte kraschar om stat saknas eller är undefined
+            if (!stat || !stat.hasData) {
+                result.push(null);
+                continue;
+            }
+
             const y = layoutStore.getY(stat.val);
             const xBase = (i * CONFIG.stride);
             const yBottom = layoutStore.chartH - layoutStore.graphPadding.bottom; 
+            const margin = 2;
 
-            return {
+            result.push({
                 xLine: xBase + (CONFIG.stride / 2),
                 xBar: xBase + margin,
                 barWidth: CONFIG.stride - (margin * 2),
                 y,
-                height: yBottom - y, // Låt höjden vara rå
+                height: yBottom - y,
                 val: stat.val
-            };
-        });
+            });
+        }
+        return result;
     });
 
     let linePath = $derived.by(() => {
@@ -31,7 +52,6 @@
         const valid = points.filter(p => p !== null);
         if (!valid.length) return '';
         
-        // Vi ritar linjen mellan alla punkter, även de som är "utanför"
         return `M ${valid[0].xLine},${valid[0].y} ` + 
                valid.slice(1).map(p => `L ${p!.xLine},${p!.y}`).join(' ');
     });

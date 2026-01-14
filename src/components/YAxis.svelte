@@ -4,12 +4,14 @@
     import { draggable } from '../lib/actions/draggable';
 
     let startVal = 0;
-    let startRange = 0;
+    
+    // Vi byter namn till 'sensitivityRange' för att tydliggöra att detta styr hastigheten
+    let sensitivityRange = 0; 
+    
     let activeType: 'min' | 'max' | null = null;
 
     let hasManualScale = $derived(layoutStore.manualMin !== null || layoutStore.manualMax !== null);
 
-    // Ticks-beräkningen är oförändrad
     let ticks = $derived([0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
         const val = layoutStore.graphMin + (pct * (layoutStore.graphMax - layoutStore.graphMin));
         return {
@@ -24,7 +26,21 @@
     function handleDragStart(type: 'min' | 'max') {
         activeType = type;
         startVal = type === 'min' ? layoutStore.graphMin : layoutStore.graphMax;
-        startRange = Math.max(0.1, layoutStore.graphMax - layoutStore.graphMin);
+        
+        // --- NY LOGIK HÄR ---
+        // Istället för nuvarande zoom (layoutStore.graphMax - Min), 
+        // tar vi datats totala omfång.
+        const totalDataRange = layoutStore.dataRange.max - layoutStore.dataRange.min;
+        
+        // Vi sätter en "bas-hastighet". 
+        // Om datat spänner över 100 enheter, vill vi kanske kunna scrolla 
+        // hela det omfånget på en skärmhöjd.
+        // Math.max(1, ...) förhindrar krasch om datat är platt.
+        sensitivityRange = Math.max(1, totalDataRange);
+        
+        // OPTION: Om du vill ha det ÄNNU stabilare mot outliers, kan du hårdkoda en "rimlig"
+        // range här om du vet vad din data brukar vara (t.ex. 100). 
+        // Men dataRange är oftast bäst.
     }
 
     function handleDrag({ dy }: { dx: number, dy: number }) {
@@ -32,10 +48,13 @@
         
         const usableHeight = layoutStore.chartH - layoutStore.graphPadding.top - layoutStore.graphPadding.bottom;
         
-        // dy är positivt när vi drar nedåt.
-        // För graf-värden: Dra nedåt (ökad Y) = Mindre värde (högre pixel-värde).
-        // Så vi inverterar dy (-dy) för att matcha "uppåt = ökat värde".
-        const valDelta = ((-dy) / usableHeight) * startRange;
+        // Multiplikatorn 1.5 gör det lite "rappare", så man slipper dra över hela skärmen
+        // för små ändringar. Justera efter tycke och smak!
+        const speedFactor = 1.5;
+
+        // Nu är 'sensitivityRange' konstant under hela dragningen, och baserad på DATA, inte zoom.
+        const valDelta = ((-dy) / usableHeight) * sensitivityRange * speedFactor;
+        
         const newVal = Number((startVal + valDelta).toFixed(1));
 
         if (activeType === 'max') {
@@ -81,12 +100,14 @@
                 class="axis-label"
                 style:top="{tick.y}px"
                 class:interactive={tick.isInteractive}
+                
                 use:draggable={{
                     axis: 'y',
                     onDragStart: () => tick.isInteractive && handleDragStart(tick.pct === 0 ? 'min' : 'max'),
                     onDrag: (e) => tick.isInteractive && handleDrag(e),
                     onDragEnd: () => activeType = null
                 }}
+                
                 role="button"
                 tabindex="-1"
             >
@@ -101,9 +122,10 @@
 {/if}
 
 <style>
-    /* CSS är oförändrad */
+    /* Oförändrad CSS */
     .y-axis-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
     .grid-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--text-main); transform: translateY(0.5px); }
+    
     .axis-label {
         position: absolute; left: 4px; transform: translateY(-50%);
         pointer-events: auto; user-select: none;
@@ -112,11 +134,21 @@
         background: rgba(255,255,255,0.75); backdrop-filter: blur(2px);
         padding: 2px 5px; border-radius: 4px; border: none; margin: 0; 
     }
+
     :global(body.dark-mode) .axis-label { background: rgba(30,30,30,0.8); }
+
     .axis-label.interactive {
-        font-weight: 700; background: rgba(255,255,255,0.9); box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: ns-resize;
+        font-weight: 700;
+        background: rgba(255,255,255,0.9); box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        cursor: ns-resize;
     }
     :global(body.dark-mode) .axis-label.interactive { background: rgba(50,50,50,0.95); }
+    
     .axis-label.clickable { cursor: pointer; }
-    .icon { display: inline-flex; align-items: center; justify-content: center; height: 100%; line-height: 1; font-size: 12px; opacity: 0.7; }
+
+    .icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 100%; line-height: 1; font-size: 12px; 
+        font-weight: normal; margin-top: -1px; opacity: 0.7;
+    }
 </style>
