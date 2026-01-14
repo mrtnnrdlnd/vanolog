@@ -1,41 +1,30 @@
-import { CONFIG } from '../config/constants';
-import type { GraphMode, GraphType, MonthBound } from '../types';
-import { calculateStat } from '../services/statistics';
-import { createMonthPath } from '../services/geometry';
+import type { GraphMode, GraphType } from '../types';
 import { dataStore } from './data.svelte';
+import { calculateLayout, type LayoutResult } from '../engine/layout-engine';
 
 const STORAGE_KEY = 'calendar_settings_v1';
 
 class LayoutStore {
-    // --- GRUNDLÄGGANDE CONFIG ---
+    // --- STATE (Inställningar & Variabler) ---
     rows = $state(7);
+    isResizing = $state(false); // Används av Grid.svelte för ankring
     
-    // NYTT: Håller koll på om vi håller på att ändra storlek just nu
-    isResizing = $state(false);
-
-    // --- GRAF INSTÄLLNINGAR ---
     graphMode = $state<GraphMode>('avg');
     graphType = $state<GraphType>('line');
     
-    // --- UTSEENDE INSTÄLLNINGAR ---
     showGraph = $state(true);
     showHeatmap = $state(true);
     showMonthLines = $state(true);
     darkMode = $state(false);
     heatmapHue = $state(205);
 
-    // --- SKÄRMSTORLEK ---
     screenH = $state(800);
     screenW = $state(400);
     
-    // --- GRAF SKALA (MANUELL) ---
     manualMin = $state<number | null>(null);
     manualMax = $state<number | null>(null);
 
-    graphPadding = {
-        top: 15,
-        bottom: 15
-    };
+    graphPadding = { top: 15, bottom: 15 };
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -43,6 +32,64 @@ class LayoutStore {
             this.updateDims();
             window.addEventListener('resize', () => this.updateDims());
         }
+    }
+
+    // --- LAYOUT ENGINE (Kärnan i förändringen) ---
+    // All tung matematik sker nu i layout-engine.ts
+    // Vi skickar bara in datat och får tillbaka färdiga koordinater.
+    layoutCalc = $derived<LayoutResult>(
+        calculateLayout(
+            dataStore.data, 
+            this.rows, 
+            this.screenW, 
+            this.screenH, 
+            this.graphMode
+        )
+    );
+
+    // --- GETTERS (Proxies till motorns resultat) ---
+    // Dessa används av komponenterna precis som förut, så vi behöver inte ändra i Grid.svelte
+    gridH = $derived(this.layoutCalc.gridH);
+    chartH = $derived(this.layoutCalc.chartH);
+    centerOffset = $derived(this.layoutCalc.centerOffset);
+    colsToHide = $derived(this.layoutCalc.colsToHide);
+    xShift = $derived(this.layoutCalc.xShift);
+    totalCols = $derived(this.layoutCalc.totalCols);
+    totalWidth = $derived(this.layoutCalc.totalWidth);
+    
+    // Visuals objektet (stats & monthBounds)
+    visuals = $derived({
+        stats: this.layoutCalc.stats,
+        monthBounds: this.layoutCalc.monthBounds
+    });
+
+
+    // --- UTILITIES & STORAGE ---
+    
+    updateDims() {
+        this.screenH = window.innerHeight;
+        this.screenW = window.innerWidth;
+    }
+
+    // Data Range & Scaling
+    dataRange = $derived.by(() => {
+        const valid = dataStore.data
+            .map(d => d.val)
+            .filter((v): v is number => v !== null && v !== undefined && !isNaN(v));
+        
+        if (!valid.length) return { min: 0, max: 100 };
+        return { min: Math.min(...valid), max: Math.max(...valid) };
+    });
+
+    graphMin = $derived(this.manualMin ?? (this.dataRange.min === this.dataRange.max ? this.dataRange.min - 10 : this.dataRange.min));
+    graphMax = $derived(this.manualMax ?? (this.dataRange.min === this.dataRange.max ? this.dataRange.max + 10 : this.dataRange.max));
+
+    getY(val: number) {
+        const range = this.graphMax - this.graphMin;
+        if (range <= 0) return this.chartH - this.graphPadding.bottom;
+        const usableHeight = this.chartH - this.graphPadding.top - this.graphPadding.bottom;
+        const normalized = (val - this.graphMin) / range;
+        return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
 
     loadSettings() {
@@ -78,99 +125,6 @@ class LayoutStore {
         this.manualMin = null;
         this.manualMax = null;
         localStorage.removeItem(STORAGE_KEY);
-    }
-
-    updateDims() {
-        this.screenH = window.innerHeight;
-        this.screenW = window.innerWidth;
-    }
-
-    // --- DERIVED GEOMETRY ---
-    gridH = $derived(this.rows * CONFIG.stride);
-    chartH = $derived(this.screenH - this.gridH - CONFIG.footerHeight - CONFIG.titleBarHeight);
-    centerOffset = $derived((this.screenW - CONFIG.stride) / 2);
-    
-    firstRealIndex = $derived(dataStore.data.findIndex(d => d.day !== undefined));
-    colsToHide = $derived(this.firstRealIndex === -1 ? 0 : Math.floor(this.firstRealIndex / this.rows));
-    xShift = $derived(this.colsToHide * CONFIG.stride);
-    totalCols = $derived(Math.ceil(dataStore.data.length / this.rows));
-    totalWidth = $derived((this.totalCols - this.colsToHide) * CONFIG.stride);
-
-    // --- AUTOMATISK SKALA ---
-    dataRange = $derived.by(() => {
-        const valid = dataStore.data
-            .map(d => d.val)
-            .filter((v): v is number => v !== null && v !== undefined && !isNaN(v));
-        
-        if (!valid.length) return { min: 0, max: 100 };
-        return { min: Math.min(...valid), max: Math.max(...valid) };
-    });
-
-    graphMin = $derived(this.manualMin ?? (this.dataRange.min === this.dataRange.max ? this.dataRange.min - 10 : this.dataRange.min));
-    graphMax = $derived(this.manualMax ?? (this.dataRange.min === this.dataRange.max ? this.dataRange.max + 10 : this.dataRange.max));
-
-    // --- VISUELLT DATA-PREP ---
-    visuals = $derived.by(() => {
-        const stats: { val: number; hasData: boolean }[] = [];
-        const monthBounds: MonthBound[] = [];
-        const monthMap = new Map<string, MonthBound>();
-        let colValues: (number | null)[] = [];
-        
-        const gridFullBottom = this.chartH + this.gridH + CONFIG.footerHeight;
-
-        for (let i = 0; i < dataStore.data.length; i++) {
-            const d = dataStore.data[i];
-            const rawCol = Math.floor(i / this.rows);
-            const row = i % this.rows;
-            const visualCol = rawCol - (this.xShift / CONFIG.stride);
-
-            if (d.day && d.val !== null) colValues.push(d.val);
-
-            if (d.day) {
-                const mKey = `${d.year}-${d.monthIdx}`;
-                if (!monthMap.has(mKey)) {
-                    const bound = { 
-                        startCol: visualCol, startRow: row, endCol: visualCol, endRow: row, 
-                        y: d.year, m: d.monthIdx, pathD: '' 
-                    };
-                    monthMap.set(mKey, bound);
-                    monthBounds.push(bound);
-                } else {
-                    const b = monthMap.get(mKey)!;
-                    b.endCol = visualCol;
-                    b.endRow = row;
-                }
-            }
-
-            if ((i + 1) % this.rows === 0 || i === dataStore.data.length - 1) {
-                const s = calculateStat(colValues, this.graphMode);
-                stats.push({ val: s ?? 0, hasData: s !== null });
-                colValues = [];
-            }
-        }
-
-        monthBounds.forEach(b => {
-            b.pathD = createMonthPath(
-                b.startCol, b.startRow, b.endCol, b.endRow, 
-                CONFIG.stride, CONFIG.radius, 
-                this.chartH, gridFullBottom, this.rows
-            );
-        });
-
-        return { stats, monthBounds };
-    });
-
-    getY(val: number) {
-        const range = this.graphMax - this.graphMin;
-        // Om min och max är samma, undvik division med noll
-        if (range <= 0) return this.chartH - this.graphPadding.bottom;
-
-        const usableHeight = this.chartH - this.graphPadding.top - this.graphPadding.bottom;
-        
-        // Här räknar vi ut positionen exakt utan avrundning
-        const normalized = (val - this.graphMin) / range;
-        
-        return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
 }
 
