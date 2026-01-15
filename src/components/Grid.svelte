@@ -9,43 +9,57 @@
     import GridCells from './GridCells.svelte';
     import GridOverlay from './GridOverlay.svelte';
 
-    let anchorIndex = $state(0);
     let scrollLeft = $state(0);
     let clientWidth = $state(800); 
 
-    const buffer = 30; 
+    // En buffer på 15-20 räcker oftast och sparar prestanda
+    const buffer = 20; 
 
-    // Virtualiserings-gränser
-    let renderStart = $derived(Math.max(0, Math.floor(scrollLeft / CONFIG.stride) - buffer));
+    // Stabilare virtualisering
+    let currentCol = $derived(Math.floor(scrollLeft / CONFIG.stride));
+    let renderStart = $derived(Math.max(0, currentCol - buffer));
+    
     let renderEnd = $derived.by(() => {
         const visibleCols = Math.ceil(clientWidth / CONFIG.stride);
-        const end = renderStart + visibleCols + (buffer * 2);
-        const maxCols = Math.floor(layoutStore.totalWidth / CONFIG.stride);
-        return Math.min(end, maxCols);
+        const totalCols = Math.floor(layoutStore.totalWidth / CONFIG.stride);
+        // Vi lägger till buffer efter de synliga kolumnerna
+        return Math.min(totalCols, currentCol + visibleCols + buffer);
     });
 
-    // Initial scroll till dagens datum
+    // Scrolla till idag - med tick() för säkerhet
     $effect(() => {
-        if (dataStore.todayIndex > 0 && uiStore.scroller && !uiStore.scrolledToToday && layoutStore.totalWidth > 0) {
-            const todayCol = Math.floor(dataStore.todayIndex / layoutStore.rows);
-            const targetX = (todayCol * CONFIG.stride) - (uiStore.scroller.clientWidth / 2) + (CONFIG.stride / 2);
-            
-            uiStore.scroller.scrollLeft = targetX;
-            uiStore.scrolledToToday = true;
+        // Körs när dessa värden ändras
+        const scroller = uiStore.scroller;
+        const totalWidth = layoutStore.totalWidth;
+        const todayIdx = dataStore.todayIndex;
+
+        if (todayIdx > 0 && scroller && !uiStore.scrolledToToday && totalWidth > 0) {
+            // Skapa en asynkron funktion för att hantera väntan
+            const scrollToToday = async () => {
+                // 1. Vänta på Svelte-uppdatering
+                await tick();
+                
+                // 2. Ge webbläsaren en mikropaus för att rendera bredden (viktigt!)
+                await new Promise(requestAnimationFrame);
+
+                const todayCol = Math.floor(todayIdx / layoutStore.rows);
+                const colX = todayCol * CONFIG.stride;
+                
+                // Centrera kolumnen i vyn
+                const targetX = colX - (scroller.clientWidth / 2) + (CONFIG.stride / 2);
+                
+                // 3. Utför scrollen
+                scroller.scrollLeft = targetX;
+                uiStore.scrolledToToday = true;
+            };
+
+            scrollToToday();
         }
     });
 
     function handleScroll() {
         if (!uiStore.scroller) return;
-        
         scrollLeft = uiStore.scroller.scrollLeft;
-        clientWidth = uiStore.scroller.clientWidth; 
-
-        if (layoutStore.isResizing) return;
-        
-        // Vi använder floor för att vara konsekventa med hur vi räknar ut renderStart
-        const currentLeftCol = Math.floor(uiStore.scroller.scrollLeft / CONFIG.stride);
-        anchorIndex = currentLeftCol * layoutStore.rows;
     }
 </script>
 
@@ -74,7 +88,6 @@
         flex: 1;
         overflow-x: auto;
         overflow-y: hidden;
-        /* Ändrat till proximity för att inte "jaga" scrollen så aggressivt */
         scroll-snap-type: x proximity; 
         display: flex; 
         align-items: flex-end;
@@ -83,13 +96,11 @@
         position: relative;
     }
 
-    /* Inaktivera snapping helt när vi ändrar storlek för att undvika ryck */
     .scroll-view.is-resizing {
         scroll-snap-type: none;
         overflow-x: hidden; 
     }
     
-    /* Tvinga bort snap medan användaren faktiskt håller i skärmen/musen */
     .scroll-view:active {
         scroll-snap-type: none;
     }
@@ -98,6 +109,6 @@
         position: relative; 
         flex-shrink: 0; 
         box-sizing: content-box;
-        display: flex;
+        /* display: flex togs bort härifrån */
     }
 </style>
