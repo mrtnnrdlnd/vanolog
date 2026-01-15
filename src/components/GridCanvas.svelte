@@ -41,30 +41,22 @@
     
     /* Bakgrunder i SVG */
     .month-bg.even { fill: #f9f9f9; }
-    .month-bg.odd  { fill: #ffffff; }
+    .month-bg.odd  { fill: #fdfdfd; }
 
     /* Celler i GridCells */
-    :global(.cell.even-m) {
+    :global(.cell) {
         background-color: #ffffff;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-    }
-    :global(.cell.odd-m) {
-        background-color: #f9f9f9;
-        box-shadow: none;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.09);
     }
 
     /* --- DARK MODE --- */
     
     /* Vi triggar dessa ENDAST när body har klassen .dark-mode */
-    :global(body.dark-mode .month-bg.even) { fill: #1a1a1a; }
-    :global(body.dark-mode .month-bg.odd)  { fill: #111111; }
+    :global(body.dark-mode .month-bg.even) { fill: #111111; }
+    :global(body.dark-mode .month-bg.odd)  { fill: #161616; }
 
-    :global(body.dark-mode .cell.even-m) { 
-        background-color: #2a2a2a; 
+    :global(body.dark-mode .cell) { 
+        background-color: #1a1a1a; 
         box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    }
-    :global(body.dark-mode .cell.odd-m) { 
-        background-color: #141414; 
-        box-shadow: none;
     }
 </style>

@@ -53,7 +53,6 @@
                     {d.isSunday ? 'is-sunday' : ''} 
                     {d.isToday ? 'is-today' : ''} 
                     {d.isDisabled ? 'is-disabled' : ''} 
-                    {d.monthIdx % 2 === 0 ? 'even-m' : 'odd-m'}
                     {textColorClass}
                     {!layoutStore.showHeatmap || valueIsEmpty ? 'no-heatmap' : ''}"
                 
