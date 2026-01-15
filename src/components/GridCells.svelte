@@ -33,6 +33,8 @@
             {@const x = (visualCol * CONFIG.stride) + (CONFIG.stride - CONFIG.boxSize)/2}
             {@const y = layoutStore.chartH + (r * CONFIG.stride) + (CONFIG.stride - CONFIG.boxSize)/2}
             
+            {@const valueIsEmpty = d.val === null || isNaN(d.val)}
+
             {@const norm = d.val !== null 
                 ? ((d.val - layoutStore.graphMin) / (layoutStore.graphMax - layoutStore.graphMin)) 
                 : 0}
@@ -44,33 +46,35 @@
                   )
                 : ''} 
 
+            
+
             <div 
                 class="cell 
-                       {d.isSunday ? 'is-sunday' : ''} 
-                       {d.isToday ? 'is-today' : ''} 
-                       {d.isDisabled ? 'is-disabled' : ''} 
-                       {textColorClass}
-                       {!layoutStore.showHeatmap ? 'no-heatmap' : ''}"
+                    {d.isSunday ? 'is-sunday' : ''} 
+                    {d.isToday ? 'is-today' : ''} 
+                    {d.isDisabled ? 'is-disabled' : ''} 
+                    {d.monthIdx % 2 === 0 ? 'even-m' : 'odd-m'}
+                    {textColorClass}
+                    {!layoutStore.showHeatmap || valueIsEmpty ? 'no-heatmap' : ''}"
                 
-                style:transform="translate({x}px, {y}px)"
-                
-                style:background-color={layoutStore.showHeatmap 
+                    style:transform="translate({x}px, {y}px)"
+                    style:background-color={layoutStore.showHeatmap && !valueIsEmpty
                     ? getHeatmapColor(
-                        d.val, 
+                        Number(d.val), 
                         layoutStore.graphMin, 
                         layoutStore.graphMax, 
                         layoutStore.darkMode,
                         layoutStore.heatmapHue
-                      ) 
+                    ) 
                     : ''}
                 
                 onclick={() => handleCellClick(idx)} 
                 role="button"
                 tabindex="0"
-                onkeypress={(e) => e.key === 'Enter' && handleCellClick(idx)}
             >
                 {d.day}
             </div>
         {/if}
     {/each}
 {/each}
+

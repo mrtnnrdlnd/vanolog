@@ -102,7 +102,7 @@
     
     .resize-pill { 
         position: relative;
-        width: 50px; height: 4px; 
+        width: 30px; height: 4px; 
         background: #00639b; 
         border-radius: 10px;
         opacity: 0.3; 
