@@ -13,7 +13,7 @@
     let scrollLeft = $state(0);
     let clientWidth = $state(800); 
 
-    const buffer = 10; 
+    const buffer = 30; 
 
     // Virtualiserings-gränser
     let renderStart = $derived(Math.max(0, Math.floor(scrollLeft / CONFIG.stride) - buffer));
