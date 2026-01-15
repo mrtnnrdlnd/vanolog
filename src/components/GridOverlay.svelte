@@ -20,19 +20,29 @@
 
 {#each { length: (renderEnd - renderStart) } as _, i}
     {@const col = renderStart + i}
-    <div class="snap-guide" style:left="{(col * CONFIG.stride) + (CONFIG.stride / 2)}px"></div>
+    <div 
+        class="snap-guide" 
+        style:left="{(col * CONFIG.stride)}px" 
+        style:width="{CONFIG.stride}px"
+    ></div>
 {/each}
 
 <style>
-    /* Samma CSS som förut */
     .month-marker {
         position: absolute; display: flex; align-items: center; justify-content: center;
-        pointer-events: none; z-index: 20; 
+        pointer-events: none; z-index: 20; color: #999; font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px;
     }
-    .month-label {
-        font-size: 13px; font-weight: 700; text-transform: uppercase; 
-        color: var(--text-muted); background: rgba(255,255,255,0.4); 
-        padding: 2px 8px; border-radius: 10px; backdrop-filter: blur(2px);
+    
+    .snap-guide {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        
+        /* FIX: 'center' gör att kolumnen hamnar mitt på skärmen (och respekterar marginalerna) 
+           istället för att tvingas till vänsterkanten. */
+        scroll-snap-align: center; 
+        
+        pointer-events: none;
     }
-    :global(body.dark-mode) .month-label { background: rgba(0,0,0,0.4); }
 </style>

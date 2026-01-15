@@ -32,5 +32,15 @@ export interface ApiDataItem {
     isToday: boolean;
 }
 
+export interface GoogleApiItem {
+    y: number;          // year
+    monthIdx: number;
+    d: number;          // day
+    val: number | null;
+    val2?: number | null;
+    isToday: boolean;
+}
+
 export type GraphMode = 'avg' | 'median' | 'max' | 'min';
 export type GraphType = 'line' | 'bar';
+

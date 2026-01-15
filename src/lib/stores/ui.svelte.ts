@@ -4,7 +4,10 @@ class UIStore {
     loading = $state(true);
     syncStatus = $state<'idle' | 'working' | 'error'>('idle');
     
-    // NYTT: Minne för om vi har scrollat till idag
+    // NYTT: Referens till scroll-elementet så vi kan styra det från andra ställen
+    scroller = $state<HTMLElement | null>(null);
+
+    // Minne för om vi har scrollat till idag
     scrolledToToday = $state(false);
 
     openEditor(idx: number) { this.selectedIdx = idx; }

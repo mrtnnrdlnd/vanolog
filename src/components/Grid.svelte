@@ -9,73 +9,56 @@
     import GridCells from './GridCells.svelte';
     import GridOverlay from './GridOverlay.svelte';
 
-    let scroller: HTMLElement;
+    // Vi använder nu uiStore.scroller istället för en lokal variabel
     let anchorIndex = $state(0);
     
     // --- VIRTUALISERING STATE ---
     let scrollLeft = $state(0);
     let clientWidth = $state(800); 
 
-    // Buffert: Renderar 20 kolumner extra åt varje håll för mjukare scroll
+    // Buffert
     const buffer = 10; 
 
-    // Start: Vilken kolumn börjar vi rendera från?
+    // Start
     let renderStart = $derived(Math.max(0, Math.floor(scrollLeft / CONFIG.stride) - buffer));
     
-    // Slut: Vilken kolumn slutar vi på?
+    // Slut
     let renderEnd = $derived.by(() => {
         const visibleCols = Math.ceil(clientWidth / CONFIG.stride);
         const end = renderStart + visibleCols + (buffer * 2);
-        
-        // VIKTIG FIX: 
-        // Vi måste dra bort 'colsToHide' från totalen, annars försöker vi rendera 
-        // kolumner som ligger bortom datats slut (vilket skapar flimmer).
-        return Math.min(layoutStore.totalCols - layoutStore.colsToHide, end);
+        const maxCols = Math.floor(layoutStore.totalWidth / CONFIG.stride);
+        return Math.min(end, maxCols);
     });
 
-    // --- SCROLL & ANCHOR LOGIK ---
+    // --- INIT: SCROLLA TILL IDAG ---
     $effect(() => {
-        if (scroller && !uiStore.loading && dataStore.todayIndex > 0) {
-            if (!uiStore.scrolledToToday) {
-                const startCol = Math.floor(dataStore.todayIndex / layoutStore.rows);
-                const centerPos = (startCol * CONFIG.stride) - (scroller.clientWidth / 2) + (CONFIG.stride / 2);
-                scroller.scrollLeft = Math.max(0, centerPos);
-                
-                // Uppdatera state direkt
-                scrollLeft = scroller.scrollLeft;
-                clientWidth = scroller.clientWidth;
-
-                uiStore.scrolledToToday = true;
-                anchorIndex = dataStore.todayIndex;
-            }
-        }
-    });
-
-    $effect(() => {
-        const r = layoutStore.rows; 
-        if (scroller && layoutStore.isResizing && anchorIndex > 0) {
-            const newCol = Math.floor(anchorIndex / r);
-            scroller.scrollLeft = newCol * CONFIG.stride;
-            scrollLeft = scroller.scrollLeft; 
+        if (dataStore.todayIndex > 0 && uiStore.scroller && !uiStore.scrolledToToday && layoutStore.totalWidth > 0) {
+            const todayCol = Math.floor(dataStore.todayIndex / layoutStore.rows);
+            
+            const targetX = (todayCol * CONFIG.stride) - (uiStore.scroller.clientWidth / 2) + (CONFIG.stride / 2);
+            
+            uiStore.scroller.scrollLeft = targetX;
+            uiStore.scrolledToToday = true;
         }
     });
 
     function handleScroll() {
-        if (!scroller) return;
+        if (!uiStore.scroller) return;
         
-        scrollLeft = scroller.scrollLeft;
-        clientWidth = scroller.clientWidth; 
+        scrollLeft = uiStore.scroller.scrollLeft;
+        clientWidth = uiStore.scroller.clientWidth; 
 
         if (layoutStore.isResizing) return;
         
-        const currentLeftCol = Math.round(scroller.scrollLeft / CONFIG.stride);
+        const currentLeftCol = Math.round(uiStore.scroller.scrollLeft / CONFIG.stride);
         anchorIndex = currentLeftCol * layoutStore.rows;
     }
 </script>
 
 <div 
     class="scroll-view" 
-    bind:this={scroller}
+    class:is-resizing={layoutStore.isResizing}
+    bind:this={uiStore.scroller}
     onscroll={handleScroll}
     bind:clientWidth={clientWidth} 
 >
@@ -95,17 +78,23 @@
 </div>
 
 <style>
-    /* Containern och bas-styles */
     .scroll-view {
         flex: 1;
         overflow-x: auto;
         overflow-y: hidden;
         scroll-snap-type: x mandatory; 
-        display: flex; align-items: flex-end;
+        display: flex; 
+        align-items: flex-end;
         -webkit-overflow-scrolling: touch; 
         scrollbar-width: none;
+        position: relative;
     }
 
+    .scroll-view.is-resizing {
+        scroll-snap-type: none;
+        overflow-x: hidden; 
+    }
+    
     .grid-container { 
         position: relative; 
         flex-shrink: 0; 
