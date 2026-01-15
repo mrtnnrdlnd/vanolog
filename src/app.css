@@ -75,8 +75,8 @@ svg { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: no
     font-size: 10px; font-weight: 600; z-index: 5; background: var(--bg-card); color: #9aa0a6; 
     cursor: pointer; line-height: 1; transition: background-color 0.2s;
 }
-.cell.is-light { color: #333 !important; }
-.cell.is-dark { color: #fff !important; }
+.cell.is-light { color: #333 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.06);}
+.cell.is-dark { color: #ccc !important; box-shadow: 0 1px 3px rgba(0,0,0,0.3);}
 
 /* FIX: Söndagar alltid röda med hög prioritet */
 .cell.is-sunday { 
