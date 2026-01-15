@@ -1,10 +1,29 @@
 <script lang="ts">
+    import { fade, fly, slide } from 'svelte/transition';
+    import { quintOut } from 'svelte/easing';
     import { layoutStore } from '../lib/stores/layout.svelte';
+    import { CONFIG } from '../lib/config/constants';
+    import type { Snippet } from 'svelte';
 
     let { isOpen = $bindable(false) } = $props();
 
-    function close() { isOpen = false; }
-    
+    let expandedSection = $state<string | null>('appearance');
+
+    function close() { 
+        isOpen = false; 
+    }
+
+    function toggleSection(id: string) {
+        expandedSection = expandedSection === id ? null : id;
+    }
+
+    function handleReset() {
+        if(confirm('Är du säker på att du vill återställa alla inställningar?')) {
+            layoutStore.resetSettings();
+            close();
+        }
+    }
+
     function getGradient(isDark: boolean) {
         return `linear-gradient(to right, 
             hsl(0, ${isDark?50:80}%, 50%), 
@@ -15,172 +34,215 @@
             hsl(300, ${isDark?50:80}%, 50%), 
             hsl(360, ${isDark?50:80}%, 50%))`;
     }
-
-    function handleReset() {
-        if(confirm('Är du säker på att du vill återställa alla inställningar?')) {
-            layoutStore.resetSettings();
-        }
-    }
 </script>
 
-{#if isOpen}
-    <div class="settings-overlay" onclick={close} role="button" tabindex="0" onkeydown={(e) => e.key === 'Escape' && close()}>
-        <div class="settings-panel" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
-            <div class="header">
-                <h2>Inställningar</h2>
-                <button class="close-icon" onclick={close}>✕</button>
-            </div>
+{#snippet section(id: string, title: string, content: Snippet)}
+    <div class="section-item">
+        <button 
+            class="section-header {expandedSection === id ? 'active' : ''}" 
+            onclick={() => toggleSection(id)}
+        >
+            <span class="section-title">{title}</span>
             
-            <div class="scroll-area">
-                <section>
-                    <h3>Utseende</h3>
-                    
-                    <div class="row">
-                        <span>Mörkt läge</span>
-                        <button class="toggle-switch" class:checked={layoutStore.darkMode} onclick={() => layoutStore.darkMode = !layoutStore.darkMode}>
-                            <div class="knob"></div>
-                        </button>
-                    </div>
+            <div class="chevron-box" style:transform={expandedSection === id ? 'rotate(180deg)' : 'rotate(0deg)'}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </div>
+        </button>
 
-                    <div class="row">
-                        <span>Färglägg dagar</span>
-                        <button class="toggle-switch" class:checked={layoutStore.showHeatmap} onclick={() => layoutStore.showHeatmap = !layoutStore.showHeatmap}>
-                            <div class="knob"></div>
-                        </button>
-                    </div>
+        {#if expandedSection === id}
+            <div class="section-body" transition:slide={{ duration: 300, easing: quintOut }}>
+                <div class="section-content">
+                    {@render content()}
+                </div>
+            </div>
+        {/if}
+    </div>
+{/snippet}
 
-                    {#if layoutStore.showHeatmap}
-                        <div class="setting-group">
-                            <label>Färgton</label>
-                            <div class="hue-wrapper">
-                                <input 
-                                    type="range" 
-                                    min="0" max="360" 
-                                    class="hue-slider"
-                                    bind:value={layoutStore.heatmapHue}
-                                    style:background={getGradient(layoutStore.darkMode)}
-                                />
-                                <div 
-                                    class="hue-preview" 
-                                    style:background="hsl({layoutStore.heatmapHue}, 70%, 50%)"
-                                ></div>
-                            </div>
-                        </div>
-                    {/if}
+{#snippet toggleRow(label: string, checked: boolean, onChange: (v: boolean) => void)}
+    <div class="setting-row">
+        <span class="setting-label">{label}</span>
+        <button 
+            class="toggle-switch {checked ? 'active' : ''}" 
+            onclick={() => onChange(!checked)}
+            role="switch" 
+            aria-checked={checked}
+            aria-label={label}
+        >
+            <div class="toggle-knob"></div>
+        </button>
+    </div>
+{/snippet}
 
-                    <div class="row">
-                        <span>Visa månadslinjer</span>
-                        <button class="toggle-switch" class:checked={layoutStore.showMonthLines} onclick={() => layoutStore.showMonthLines = !layoutStore.showMonthLines}>
-                            <div class="knob"></div>
-                        </button>
-                    </div>
-                </section>
-
-                <hr />
-
-                <section>
-                    <h3>Graf</h3>
-                    <div class="row">
-                        <span>Visa graf</span>
-                        <button class="toggle-switch" class:checked={layoutStore.showGraph} onclick={() => layoutStore.showGraph = !layoutStore.showGraph}>
-                            <div class="knob"></div>
-                        </button>
-                    </div>
-                    
-                    {#if layoutStore.showGraph}
-                        <div class="setting-group">
-                            <label>Typ</label>
-                            <div class="segment-control">
-                                <button class:active={layoutStore.graphType === 'line'} onclick={() => layoutStore.graphType = 'line'}>Linje</button>
-                                <button class:active={layoutStore.graphType === 'bar'} onclick={() => layoutStore.graphType = 'bar'}>Stapel</button>
-                            </div>
-                        </div>
-
-                        <div class="setting-group">
-                            <label>Beräkning</label>
-                            <div class="segment-control grid-4">
-                                <button class:active={layoutStore.graphMode === 'avg'} onclick={() => layoutStore.graphMode = 'avg'}>Snitt</button>
-                                <button class:active={layoutStore.graphMode === 'median'} onclick={() => layoutStore.graphMode = 'median'}>Median</button>
-                                <button class:active={layoutStore.graphMode === 'max'} onclick={() => layoutStore.graphMode = 'max'}>Max</button>
-                                <button class:active={layoutStore.graphMode === 'min'} onclick={() => layoutStore.graphMode = 'min'}>Min</button>
-                            </div>
-                            <p class="help-text">
-                                {layoutStore.graphMode === 'avg' ? 'Genomsnitt per kolumn.' : 
-                                 layoutStore.graphMode === 'median' ? 'Medianvärde per kolumn.' :
-                                 layoutStore.graphMode === 'max' ? 'Högsta värdet per kolumn.' : 
-                                 'Lägsta värdet per kolumn.'}
-                            </p>
-                        </div>
-                    {/if}
-                </section>
-
-                <hr />
+{#if isOpen}
+    <div 
+        class="settings-backdrop" 
+        style:top="{CONFIG.titleBarHeight}px"
+        onclick={close} 
+        role="button" 
+        tabindex="0" 
+        onkeydown={(e) => e.key === 'Escape' && close()}
+        transition:fade={{ duration: 200 }}
+    >
+        <div 
+            class="settings-panel" 
+            onclick={(e) => e.stopPropagation()} 
+            role="document" 
+            tabindex="0" 
+            onkeydown={() => {}}
+            transition:fly={{ x: 320, duration: 400, opacity: 1, easing: quintOut }}
+        >
+            <div class="panel-scroll-area">
                 
-                <button class="reset-all-btn" onclick={handleReset}>
-                    Återställ alla inställningar
-                </button>
+                {#snippet appearanceContent()}
+                    <div class="content-stack">
+                        {@render toggleRow("Dark Mode", layoutStore.darkMode, (v) => layoutStore.darkMode = v)}
+                        {@render toggleRow("Heatmap", layoutStore.showHeatmap, (v) => layoutStore.showHeatmap = v)}
+                        {@render toggleRow("Månadsgränser", layoutStore.showMonthLines, (v) => layoutStore.showMonthLines = v)}
+                        
+                        {#if layoutStore.showHeatmap}
+                            <div class="setting-group">
+                                <label for="hue-slider">Färgton</label>
+                                <div class="hue-wrapper">
+                                    <input 
+                                        id="hue-slider"
+                                        type="range" min="0" max="360" 
+                                        bind:value={layoutStore.heatmapHue}
+                                        class="hue-slider"
+                                        style:background={getGradient(layoutStore.darkMode)}
+                                    />
+                                    <div class="hue-preview" style:background="hsl({layoutStore.heatmapHue}, 60%, 50%)"></div>
+                                </div>
+                            </div>
+                        {/if}
+                    </div>
+                {/snippet}
+                {@render section('appearance', 'Utseende', appearanceContent)}
+
+
+                {#snippet graphContent()}
+                    <div class="content-stack">
+                        {@render toggleRow("Visa Graf", layoutStore.showGraph, (v) => layoutStore.showGraph = v)}
+
+                        {#if layoutStore.showGraph}
+                            <div class="setting-group">
+                                <label>Graftyp</label>
+                                <div class="segment-control">
+                                    <button class:active={layoutStore.graphType === 'line'} onclick={() => layoutStore.graphType = 'line'}>Linje</button>
+                                    <button class:active={layoutStore.graphType === 'bar'} onclick={() => layoutStore.graphType = 'bar'}>Stapel</button>
+                                </div>
+                            </div>
+
+                            <div class="setting-group">
+                                <label>Beräkning</label>
+                                <div class="segment-control">
+                                    <button class:active={layoutStore.graphMode === 'avg'} onclick={() => layoutStore.graphMode = 'avg'}>Snitt</button>
+                                    <button class:active={layoutStore.graphMode === 'median'} onclick={() => layoutStore.graphMode = 'median'}>Median</button>
+                                    <button class:active={layoutStore.graphMode === 'min'} onclick={() => layoutStore.graphMode = 'min'}>Min</button>
+                                    <button class:active={layoutStore.graphMode === 'max'} onclick={() => layoutStore.graphMode = 'max'}>Max</button>
+                                </div>
+                            </div>
+                        {/if}
+                    </div>
+                {/snippet}
+                {@render section('graph', 'Graf & Data', graphContent)}
+
+
+                {#snippet systemContent()}
+                    <div class="content-stack">
+                        <button class="danger-btn" onclick={handleReset}>
+                            Återställ standard
+                        </button>
+                        <p class="help-text">Detta raderar inte din data.</p>
+                    </div>
+                {/snippet}
+                {@render section('system', 'System', systemContent)}
+
             </div>
         </div>
     </div>
 {/if}
 
 <style>
-    .settings-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 2000; display: flex; justify-content: flex-end; backdrop-filter: blur(2px); }
-    .settings-panel { width: 300px; background: var(--bg-card, #fff); height: 100%; box-shadow: -5px 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; animation: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); color: var(--text-main, #333); }
-    .header { padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color, #eee); }
-    h2 { margin: 0; font-size: 20px; font-weight: 700; }
-    h3 { margin: 0 0 15px 0; font-size: 13px; text-transform: uppercase; color: var(--text-muted, #888); letter-spacing: 1px; }
-    .scroll-area { padding: 20px; overflow-y: auto; flex: 1; }
-    section { margin-bottom: 30px; }
-    hr { border: none; border-top: 1px solid var(--border-color, #eee); margin: 0 0 30px 0; }
-    .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-size: 15px; font-weight: 500; }
-    
-    .toggle-switch { width: 44px; height: 24px; border-radius: 12px; background: #e0e0e0; border: none; position: relative; cursor: pointer; transition: background 0.2s; padding: 2px; }
-    .toggle-switch .knob { width: 20px; height: 20px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    .toggle-switch.checked { background: #00639b; }
-    .toggle-switch.checked .knob { transform: translateX(20px); }
-    
-    .setting-group { margin-bottom: 20px; }
-    .setting-group label { display: block; font-size: 12px; margin-bottom: 8px; font-weight: 600; }
-    
-    .segment-control { display: flex; background: var(--bg-input, #f0f0f0); border-radius: 8px; padding: 4px; gap: 4px; }
-    .segment-control.grid-4 { display: grid; grid-template-columns: 1fr 1fr; }
-    
-    .segment-control button {
-        flex: 1; border: none; background: transparent; padding: 8px;
-        font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 6px;
-        color: var(--text-muted, #666); transition: all 0.2s;
+    .settings-backdrop {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.4); 
+        backdrop-filter: blur(2px);
+        z-index: 900; 
+        display: flex; justify-content: flex-end;
     }
-    .segment-control button.active { 
-        background: var(--bg-card, #fff); 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
-        font-weight: 700; color: #00639b; 
+    
+    .settings-panel {
+        background: var(--bg-card, #fff);
+        width: 320px; height: 100%;
+        box-shadow: -10px 0 40px rgba(0,0,0,0.15);
+        display: flex; flex-direction: column;
+        color: var(--text-main, #333);
+        border-left: 1px solid var(--border-color);
     }
 
-    .hue-wrapper { display: flex; align-items: center; gap: 10px; }
-    .hue-slider { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; outline: none; }
-    .hue-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); cursor: pointer; border: 2px solid rgba(0,0,0,0.1); }
-    .hue-preview { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.1); }
+    .panel-scroll-area {
+        flex: 1; overflow-y: auto; padding: 10px 0;
+        display: flex; flex-direction: column; 
+    }
 
-    .help-text { font-size: 11px; color: var(--text-muted, #999); margin-top: 6px; }
-    .close-icon { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted, #999); }
+    /* List Items */
+    .section-item { border-bottom: 1px solid var(--border-color, #f0f0f0); }
 
-    /* NY STIL FÖR ÅTERSTÄLL-KNAPP */
-    .reset-all-btn {
-        width: 100%;
-        padding: 12px;
-        background: rgba(211, 47, 47, 0.1);
-        color: #d32f2f;
-        border: 1px solid rgba(211, 47, 47, 0.2);
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 13px;
-        cursor: pointer;
+    .section-header {
+        width: 100%; display: flex; align-items: center; justify-content: space-between;
+        padding: 18px 24px; /* Lite mer padding nu när ikonerna är borta */
+        background: transparent; border: none; cursor: pointer;
+        color: var(--text-main); font-size: 15px; font-weight: 500;
         transition: background 0.2s;
     }
-    .reset-all-btn:hover {
-        background: rgba(211, 47, 47, 0.2);
-    }
+    .section-header:hover { background: var(--bg-input, #fafafa); }
+    .section-header.active { background: var(--bg-input, #f9f9f9); color: #00639b; font-weight: 600; }
 
-    @keyframes slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .section-title { font-size: 16px; }
+
+    .chevron-box { 
+        transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); 
+        color: var(--text-muted); opacity: 0.6; 
+    }
+    .section-header.active .chevron-box { opacity: 1; color: #00639b; }
+
+    /* Content */
+    .section-body { overflow: hidden; background: var(--bg-input, #fafafa); }
+    .section-content { padding: 24px 24px; box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.05); }
+    .content-stack { display: flex; flex-direction: column; gap: 24px; }
+
+    /* Controls */
+    .setting-row { display: flex; justify-content: space-between; align-items: center; }
+    .setting-label { font-size: 14px; font-weight: 500; color: var(--text-main); }
+    .setting-group label { display: block; font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .toggle-switch { width: 44px; height: 24px; background: #e0e0e0; border-radius: 20px; position: relative; cursor: pointer; border: none; transition: background 0.3s; }
+    .toggle-switch.active { background: #00639b; }
+    .toggle-knob { width: 20px; height: 20px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+    .toggle-switch.active .toggle-knob { transform: translateX(20px); }
+
+    .segment-control { display: flex; background: rgba(0,0,0,0.05); padding: 4px; border-radius: 10px; }
+    .segment-control button { flex: 1; border: none; background: transparent; padding: 8px 0; font-size: 13px; border-radius: 7px; cursor: pointer; color: var(--text-muted); font-weight: 500; transition: all 0.2s; }
+    .segment-control button.active { background: var(--bg-card, #fff); box-shadow: 0 2px 6px rgba(0,0,0,0.08); color: #00639b; font-weight: 600; }
+
+    .hue-wrapper { display: flex; align-items: center; gap: 12px; }
+    .hue-slider { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
+    .hue-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); border: 1px solid rgba(0,0,0,0.05); transform: scale(1); transition: transform 0.1s; }
+    .hue-preview { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
+
+    .danger-btn { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid transparent; background: rgba(255, 59, 48, 0.1); color: #ff3b30; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.2s; }
+    .danger-btn:hover { background: rgba(255, 59, 48, 0.2); }
+    .help-text { font-size: 12px; color: var(--text-muted); margin: 0; text-align: center; opacity: 0.8; }
+
+    :global(body.dark-mode) .section-item { border-color: #333; }
+    :global(body.dark-mode) .section-header:hover { background: #252525; }
+    :global(body.dark-mode) .section-header.active { background: #252525; color: #64b5f6; }
+    :global(body.dark-mode) .section-header.active .chevron-box { color: #64b5f6; }
+    :global(body.dark-mode) .section-body { background: #1e1e1e; }
+    :global(body.dark-mode) .toggle-switch { background: #444; }
+    :global(body.dark-mode) .toggle-switch.active { background: #00639b; }
+    :global(body.dark-mode) .segment-control { background: rgba(255,255,255,0.1); }
 </style>

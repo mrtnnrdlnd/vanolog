@@ -7,7 +7,7 @@ const generateMockData = (): ApiDataItem[] => {
   const startYear = now.getFullYear();
   
   // Skapa mockdata för hela året
-  for (let i = 0; i < 365; i++) {
+  for (let i = 0; i < 3650; i++) {
     const date = new Date(startYear, 0, 1 + i);
     mockData.push({
       year: date.getFullYear(),
