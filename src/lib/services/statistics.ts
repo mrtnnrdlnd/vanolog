@@ -6,6 +6,14 @@ export function calculateStat(values: (number | null)[], mode: GraphMode): numbe
     
     if (valid.length === 0) return null;
 
+    // --- NYTT: Fallback för 'all' ---
+    // Layout-motorn använder denna funktion för att skapa staplar/punkter per kolumn.
+    // Även om vi ska rita en detaljerad linje, kan det vara bra att returnera 
+    // medelvärdet här så att systemet inte kraschar om man byter graf-typ.
+    if (mode === 'all') {
+        return valid.reduce((a, b) => a + b, 0) / valid.length;
+    }
+
     // --- MEDELVÄRDE (Average) ---
     if (mode === 'avg') {
         return valid.reduce((a, b) => a + b, 0) / valid.length;

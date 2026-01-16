@@ -41,6 +41,6 @@ export interface GoogleApiItem {
     isToday: boolean;
 }
 
-export type GraphMode = 'avg' | 'median' | 'max' | 'min';
+export type GraphMode = 'avg' | 'median' | 'max' | 'min' | 'all';
 export type GraphType = 'line' | 'bar';
 

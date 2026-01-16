@@ -137,11 +137,19 @@
 
                             <div class="setting-group">
                                 <label>Beräkning</label>
-                                <div class="segment-control">
-                                    <button class:active={layoutStore.graphMode === 'avg'} onclick={() => layoutStore.graphMode = 'avg'}>Snitt</button>
+                                <div class="mode-grid">
+                                    <button class:active={layoutStore.graphMode === 'avg'} onclick={() => layoutStore.graphMode = 'avg'}>Medel</button>
                                     <button class:active={layoutStore.graphMode === 'median'} onclick={() => layoutStore.graphMode = 'median'}>Median</button>
                                     <button class:active={layoutStore.graphMode === 'min'} onclick={() => layoutStore.graphMode = 'min'}>Min</button>
                                     <button class:active={layoutStore.graphMode === 'max'} onclick={() => layoutStore.graphMode = 'max'}>Max</button>
+                                    
+                                    <button 
+                                        class="full-width" 
+                                        class:active={layoutStore.graphMode === 'all'} 
+                                        onclick={() => layoutStore.graphMode = 'all'}
+                                    >
+                                        Tidslinje (Alla punkter)
+                                    </button>
                                 </div>
                             </div>
                         {/if}
@@ -193,7 +201,7 @@
 
     .section-header {
         width: 100%; display: flex; align-items: center; justify-content: space-between;
-        padding: 18px 24px; /* Lite mer padding nu när ikonerna är borta */
+        padding: 18px 24px;
         background: transparent; border: none; cursor: pointer;
         color: var(--text-main); font-size: 15px; font-weight: 500;
         transition: background 0.2s;
@@ -224,9 +232,51 @@
     .toggle-knob { width: 20px; height: 20px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
     .toggle-switch.active .toggle-knob { transform: translateX(20px); }
 
+    /* OLD STYLE FLEX: Används för graftyp-knapparna (Linje/Stapel)
+    */
     .segment-control { display: flex; background: rgba(0,0,0,0.05); padding: 4px; border-radius: 10px; }
     .segment-control button { flex: 1; border: none; background: transparent; padding: 8px 0; font-size: 13px; border-radius: 7px; cursor: pointer; color: var(--text-muted); font-weight: 500; transition: all 0.2s; }
     .segment-control button.active { background: var(--bg-card, #fff); box-shadow: 0 2px 6px rgba(0,0,0,0.08); color: #00639b; font-weight: 600; }
+
+    /* NEW STYLE GRID: Används för beräkning, men stylad för att se ut som segment-control ovan 
+    */
+    .mode-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 3px; /* Lite mindre gap för att efterlikna segment-control */
+        background: rgba(0,0,0,0.05); /* Samma grå bakgrund */
+        padding: 4px;
+        border-radius: 10px;
+    }
+    
+    .mode-grid button {
+        border: none;
+        background: transparent;
+        padding: 10px 0;
+        font-size: 13px;
+        border-radius: 7px;
+        cursor: pointer;
+        color: var(--text-muted);
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .mode-grid button:hover {
+        background: rgba(255,255,255,0.4);
+    }
+
+    .mode-grid button.active {
+        background: var(--bg-card, #fff);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        color: #00639b;
+        font-weight: 600;
+    }
+
+    .mode-grid button.full-width {
+        grid-column: 1 / -1; 
+        margin-top: 2px;
+    }
+
 
     .hue-wrapper { display: flex; align-items: center; gap: 12px; }
     .hue-slider { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
@@ -245,4 +295,6 @@
     :global(body.dark-mode) .toggle-switch { background: #444; }
     :global(body.dark-mode) .toggle-switch.active { background: #00639b; }
     :global(body.dark-mode) .segment-control { background: rgba(255,255,255,0.1); }
+    /* Dark mode för den nya gridden */
+    :global(body.dark-mode) .mode-grid { background: rgba(255,255,255,0.1); }
 </style>
