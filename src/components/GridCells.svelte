@@ -48,7 +48,8 @@
 
             
 
-            <div 
+            <button 
+                type="button"
                 class="cell 
                     {d.isSunday ? 'is-sunday' : ''} 
                     {d.isToday ? 'is-today' : ''} 
@@ -56,8 +57,8 @@
                     {textColorClass}
                     {!layoutStore.showHeatmap || valueIsEmpty ? 'no-heatmap' : ''}"
                 
-                    style:transform="translate({x}px, {y}px)"
-                    style:background-color={layoutStore.showHeatmap && !valueIsEmpty
+                style:transform="translate({x}px, {y}px)"
+                style:background-color={layoutStore.showHeatmap && !valueIsEmpty
                     ? getHeatmapColor(
                         Number(d.val), 
                         layoutStore.graphMin, 
@@ -68,11 +69,11 @@
                     : ''}
                 
                 onclick={() => handleCellClick(idx)} 
-                role="button"
-                tabindex="0"
+                
+                aria-label="{d.day} {CONFIG.months[d.monthIdx]}"
             >
                 {d.day}
-            </div>
+            </button>
         {/if}
     {/each}
 {/each}

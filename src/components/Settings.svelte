@@ -101,7 +101,7 @@
     layout: 'flex' | 'grid' = 'flex'
 )}
     <div class="setting-group">
-        <label>{label}</label>
+        <span class="group-label">{label}</span>
         <div class="selector-container {layout}">
             {#each options as opt}
                 <button 
@@ -127,13 +127,18 @@
         onkeydown={(e) => e.key === 'Escape' && close()}
         transition:fade={{ duration: 200 }}
     >
-    
+
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div 
             class="settings-panel" 
             onclick={(e) => e.stopPropagation()} 
             role="document" 
             tabindex="0" 
-            onkeydown={() => {}}
+            onkeydown={(e) => {
+                // Stoppa tangentbordshändelser från att bubbla upp och stänga modalen av misstag
+                e.stopPropagation();
+            }}
             transition:fly={TRANS_PANEL}
         >
             <div class="panel-scroll-area">
@@ -146,7 +151,7 @@
                         
                         {#if layoutStore.showHeatmap}
                             <div class="setting-group">
-                                <label for="hue-slider">Färgton</label>
+                                <span class="group-label">Färgton</span>
                                 <div class="hue-wrapper">
                                     <input 
                                         id="hue-slider" type="range" min="0" max="360" 
@@ -223,7 +228,15 @@
     /* --- CONTROLS --- */
     .setting-row { display: flex; justify-content: space-between; align-items: center; }
     .setting-label { font-size: 14px; font-weight: 500; color: var(--text-main); }
-    .setting-group label { display: block; font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .setting-group .group-label { 
+        display: block; 
+        font-size: 11px; 
+        font-weight: 700; 
+        margin-bottom: 8px; 
+        color: var(--text-muted); 
+        text-transform: uppercase; 
+        letter-spacing: 0.5px; 
+    } 
 
     /* Toggle Switch */
     .toggle-switch { width: 44px; height: 24px; background: #e0e0e0; border-radius: 20px; position: relative; cursor: pointer; border: none; transition: background 0.3s; }
@@ -270,7 +283,7 @@
 
     /* --- SLIDERS & OTHERS --- */
     .hue-wrapper { display: flex; align-items: center; gap: 12px; }
-    .hue-slider { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
+    .hue-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
     .hue-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); border: 1px solid rgba(0,0,0,0.05); transform: scale(1); transition: transform 0.1s; }
     .hue-preview { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
 
