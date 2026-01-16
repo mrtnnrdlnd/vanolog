@@ -15,7 +15,43 @@
 
     const BUFFER = 20; 
 
-    // --- FIX: LOKAL OFFSET ---
+    // --- SÄKER ROTATIONSHANTERING ---
+    let isRotating = $state(false);
+    let resizeTimer: ReturnType<typeof setTimeout>;
+
+    function handleWindowResize() {
+        // 1. Stäng av snapping direkt
+        isRotating = true;
+
+        clearTimeout(resizeTimer);
+        
+        // 2. Ge webbläsaren gott om tid att rotera klart och rita om layouten (500ms)
+        resizeTimer = setTimeout(() => {
+            finalizeRotation();
+        }, 500);
+    }
+
+    async function finalizeRotation() {
+        if (!uiStore.scroller) return;
+
+        // Vänta på att Svelte har uppdaterat DOMen med nya bredder
+        await tick();
+
+        // 1. Behåll nuvarande "logiska" kolumn
+        // (Vi litar inte på pixelvärden här eftersom bredden ändrats)
+        const currentCenter = uiStore.scroller.scrollLeft; // Rå scroll
+        const nearestCol = Math.round(currentCenter / CONFIG.stride);
+        const targetX = nearestCol * CONFIG.stride;
+
+        // 2. Sätt positionen exakt (utan animering)
+        uiStore.scroller.scrollLeft = targetX;
+
+        // 3. Slå på snapping igen
+        isRotating = false;
+    }
+
+    // --- LOKAL OFFSET ---
+    // Detta måste vara reaktivt ($derived) så paddingen uppdateras vid rotation
     let localOffset = $derived((containerWidth - CONFIG.stride) / 2);
 
     // --- VIRTUALISERING ---
@@ -34,21 +70,21 @@
         scrollLeft = uiStore.scroller.scrollLeft;
     }
 
-    // --- SCROLL TILL IDAG ---
+    // --- SCROLL TILL IDAG (Initialt) ---
     $effect(() => {
         if (uiStore.scroller && dataStore.data.length > 0 && !uiStore.scrolledToToday && containerWidth > 0) {
             const todayItem = dataStore.data[dataStore.todayIndex];
             
             if (todayItem) {
-                // 1. Hitta "Rå-kolumnen" i datan
                 const rawColIndex = Math.floor(dataStore.todayIndex / layoutStore.rows);
-                
-                // 2. BUGGFIX: Dra bort de kolumner som är dolda (padding-dagar)
-                // Detta är avgörande när rows är lågt (1-3)
                 const visualColIndex = rawColIndex - layoutStore.colsToHide;
                 
-                // 3. Beräkna position
-                const targetX = visualColIndex * CONFIG.stride;
+                // BUGGFIX: Lägg till +2 pixlar ("The Nudge")
+                // På mobiler kan exakta värden avrundas nedåt (t.ex 99.99px).
+                // Då tror snap-motorn att vi är på föregående kolumn.
+                // Genom att sikta 2px för långt garanterar vi att vi korsar gränsen.
+                // CSS Snapping drar sedan tillbaka oss till exakt 0.
+                const targetX = (visualColIndex * CONFIG.stride) + 2;
 
                 uiStore.scroller.scrollLeft = targetX;
                 scrollLeft = targetX; 
@@ -58,9 +94,12 @@
     });
 </script>
 
+<svelte:window onresize={handleWindowResize} />
+
 <div 
     class="scroll-view" 
     class:is-resizing={layoutStore.isResizing}
+    class:is-rotating={isRotating}
     bind:this={uiStore.scroller}
     bind:clientWidth={containerWidth}
     onscroll={handleScroll}
@@ -81,9 +120,25 @@
 </div>
 
 <style>
+    /* Detta säkerställer att touch fungerar som förväntat på mobiler 
+       pan-y tillåter vertikal scroll (sidan), pan-x tillåter vår horisontella
+    */
+    .scroll-view {
+        touch-action: pan-x pan-y;
+    }
+
     .is-resizing {
         scroll-snap-type: none !important;
         scroll-behavior: auto !important; 
         cursor: ns-resize;
+    }
+
+    /* SÄKERHETS-CSS:
+       När vi roterar: Stäng BARA av snapping och smooth scroll.
+       Rör ALDRIG overflow eller touch-events. Då kan den inte låsa sig.
+    */
+    .is-rotating {
+        scroll-snap-type: none !important;
+        scroll-behavior: auto !important;
     }
 </style>
