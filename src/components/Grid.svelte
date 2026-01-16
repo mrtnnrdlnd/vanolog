@@ -15,8 +15,11 @@
 
     const BUFFER = 20; 
 
-    // --- VIRTUALISERING (Behåll denna logik!) ---
-    let effectiveScrollX = $derived(scrollLeft - layoutStore.centerOffset);
+    // --- FIX: LOKAL OFFSET ---
+    let localOffset = $derived((containerWidth - CONFIG.stride) / 2);
+
+    // --- VIRTUALISERING ---
+    let effectiveScrollX = $derived(scrollLeft - localOffset);
     let currentCol = $derived(Math.floor(effectiveScrollX / CONFIG.stride));
     let renderStart = $derived(Math.max(0, currentCol - BUFFER));
     
@@ -26,7 +29,6 @@
         return Math.min(totalCols, currentCol + visibleCols + BUFFER);
     });
 
-    // --- ENDAST UPPDATERING AV STATE ---
     function handleScroll() {
         if (!uiStore.scroller) return;
         scrollLeft = uiStore.scroller.scrollLeft;
@@ -36,12 +38,17 @@
     $effect(() => {
         if (uiStore.scroller && dataStore.data.length > 0 && !uiStore.scrolledToToday && containerWidth > 0) {
             const todayItem = dataStore.data[dataStore.todayIndex];
+            
             if (todayItem) {
-                const colIndex = Math.floor(dataStore.todayIndex / layoutStore.rows);
-                const colX = colIndex * CONFIG.stride;
+                // 1. Hitta "Rå-kolumnen" i datan
+                const rawColIndex = Math.floor(dataStore.todayIndex / layoutStore.rows);
                 
-                // Målpositionen
-                const targetX = colX + layoutStore.centerOffset - (containerWidth / 2) + (CONFIG.stride / 2);
+                // 2. BUGGFIX: Dra bort de kolumner som är dolda (padding-dagar)
+                // Detta är avgörande när rows är lågt (1-3)
+                const visualColIndex = rawColIndex - layoutStore.colsToHide;
+                
+                // 3. Beräkna position
+                const targetX = visualColIndex * CONFIG.stride;
 
                 uiStore.scroller.scrollLeft = targetX;
                 scrollLeft = targetX; 
@@ -57,12 +64,12 @@
     bind:this={uiStore.scroller}
     bind:clientWidth={containerWidth}
     onscroll={handleScroll}
-    style:scroll-padding-left="{layoutStore.centerOffset}px" 
+    style:scroll-padding-left="{localOffset}px" 
 >
     <div 
         class="grid-container" 
-        style:margin-left="{layoutStore.centerOffset}px"
-        style:margin-right="{layoutStore.centerOffset}px"
+        style:margin-left="{localOffset}px"
+        style:margin-right="{localOffset}px"
         style:width="{layoutStore.totalWidth}px"
         style:height="{layoutStore.screenH}px"
     >
@@ -75,7 +82,6 @@
 
 <style>
     .is-resizing {
-        /* Stäng av snapping medan vi drar i storleken */
         scroll-snap-type: none !important;
         scroll-behavior: auto !important; 
         cursor: ns-resize;
