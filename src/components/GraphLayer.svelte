@@ -1,13 +1,12 @@
 <script lang="ts">
     import { layoutStore } from '../lib/stores/layout.svelte';
-    import { dataStore } from '../lib/stores/data.svelte'; // NY IMPORT
+    import { dataStore } from '../lib/stores/data.svelte';
     import { CONFIG } from '../lib/config/constants';
 
     let { renderStart, renderEnd } = $props<{ renderStart: number, renderEnd: number }>();
 
     // --- BEFINTLIG LOGIK (för staplar och vanliga linjer) ---
     let points = $derived.by(() => {
-        // Om vi kör 'all' mode, strunta i att beräkna kolumn-punkter
         if (layoutStore.graphMode === 'all') return [];
 
         const stats = layoutStore.visuals.stats;
@@ -28,7 +27,10 @@
 
             const xBase = i * CONFIG.stride;
             const xLine = xBase + (CONFIG.stride / 2);
-            const y = layoutStore.getY(stat.val) + layoutStore.graphPadding.top;
+            
+            // ÄNDRING: Tog bort '+ layoutStore.graphPadding.top'
+            // Detta flyttar upp grafen 15px så den matchar Y-axeln
+            const y = layoutStore.getY(stat.val);
 
             // För staplar
             const margin = 2;
@@ -50,17 +52,9 @@
     let detailedPath = $derived.by(() => {
         if (layoutStore.graphMode !== 'all') return '';
 
-        // 1. Beräkna steglängd per cell (dag)
-        // Om en kolumn är 26px bred och har 7 rader, är varje dag ca 3.7px bred.
         const stepX = CONFIG.stride / layoutStore.rows;
-        
-        // 2. Bestäm vilka data-index vi ska rita
-        // Vi måste mappa renderStart (kolumn) till data-index.
         const startCol = Math.max(0, renderStart - 1);
         const endCol = renderEnd + 1;
-
-        // Eftersom dataStore.data innehåller padding i början måste vi 
-        // räkna med layoutStore.colsToHide.
         const startIndex = (startCol + layoutStore.colsToHide) * layoutStore.rows;
         const endIndex = (endCol + layoutStore.colsToHide) * layoutStore.rows;
 
@@ -70,22 +64,15 @@
         for (let i = startIndex; i < endIndex; i++) {
             const item = dataStore.data[i];
             
-            // Hoppa över om data saknas eller om vi är utanför arrayen
             if (!item || item.val === null) continue;
 
-            // 3. Beräkna position
-            const rawCol = Math.floor(i / layoutStore.rows); // Vilken "riktig" kolumn datan ligger i
-            const rowInCol = i % layoutStore.rows;           // Vilken rad (0-6)
-            
-            // Justera för dolda kolumner så grafen börjar på rätt ställe
+            const rawCol = Math.floor(i / layoutStore.rows); 
+            const rowInCol = i % layoutStore.rows;           
             const visualCol = rawCol - layoutStore.colsToHide;
-            
-            // X = (Kolumnens start) + (Dag-offset inuti kolumnen)
-            // Vi lägger till hälften av stepX för att centrera punkten i sin "tids-slot"
             const x = (visualCol * CONFIG.stride) + (rowInCol * stepX) + (stepX / 2);
             
-            // Y = Värde mappat till grafhöjd
-            const y = layoutStore.getY(item.val) + layoutStore.graphPadding.top;
+            // ÄNDRING: Tog bort '+ layoutStore.graphPadding.top' här också
+            const y = layoutStore.getY(item.val);
 
             if (firstPoint) {
                 path += `M ${x},${y}`;
@@ -97,7 +84,6 @@
         return path;
     });
 
-    // Vanlig linje-path (för 'avg', 'max' etc)
     let summaryPath = $derived.by(() => {
         if (layoutStore.graphMode === 'all' || layoutStore.graphType !== 'line') return '';
         const valid = points.filter(p => p !== null);
@@ -121,7 +107,8 @@
                 stroke-linejoin="round"
                 vector-effect="non-scaling-stroke"
             />
-            {:else if layoutStore.graphType === 'line'}
+
+        {:else if layoutStore.graphType === 'line'}
             <path 
                 d={summaryPath} 
                 fill="none" 
@@ -156,7 +143,6 @@
 {/if}
 
 <style>
-    /* Dark mode override för linjen */
     :global(body.dark-mode) path {
         stroke: #4fc3f7;
     }
