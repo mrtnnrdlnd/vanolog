@@ -8,67 +8,56 @@
     import GridCanvas from './GridCanvas.svelte';
     import GridCells from './GridCells.svelte';
     import GridOverlay from './GridOverlay.svelte';
+    import GraphLayer from './GraphLayer.svelte';
 
     let scrollLeft = $state(0);
-    let clientWidth = $state(800); 
+    let containerWidth = $state(1000); 
 
-    // En buffer på 15-20 räcker oftast och sparar prestanda
-    const buffer = 20; 
+    const BUFFER = 20; 
 
-    // Stabilare virtualisering
-    let currentCol = $derived(Math.floor(scrollLeft / CONFIG.stride));
-    let renderStart = $derived(Math.max(0, currentCol - buffer));
+    // --- VIRTUALISERING (Behåll denna logik!) ---
+    let effectiveScrollX = $derived(scrollLeft - layoutStore.centerOffset);
+    let currentCol = $derived(Math.floor(effectiveScrollX / CONFIG.stride));
+    let renderStart = $derived(Math.max(0, currentCol - BUFFER));
     
     let renderEnd = $derived.by(() => {
-        const visibleCols = Math.ceil(clientWidth / CONFIG.stride);
+        const visibleCols = Math.ceil(containerWidth / CONFIG.stride);
         const totalCols = Math.floor(layoutStore.totalWidth / CONFIG.stride);
-        // Vi lägger till buffer efter de synliga kolumnerna
-        return Math.min(totalCols, currentCol + visibleCols + buffer);
+        return Math.min(totalCols, currentCol + visibleCols + BUFFER);
     });
 
-    // Scrolla till idag - med tick() för säkerhet
-    $effect(() => {
-        // Körs när dessa värden ändras
-        const scroller = uiStore.scroller;
-        const totalWidth = layoutStore.totalWidth;
-        const todayIdx = dataStore.todayIndex;
-
-        if (todayIdx > 0 && scroller && !uiStore.scrolledToToday && totalWidth > 0) {
-            // Skapa en asynkron funktion för att hantera väntan
-            const scrollToToday = async () => {
-                // 1. Vänta på Svelte-uppdatering
-                await tick();
-                
-                // 2. Ge webbläsaren en mikropaus för att rendera bredden (viktigt!)
-                await new Promise(requestAnimationFrame);
-
-                const todayCol = Math.floor(todayIdx / layoutStore.rows);
-                const colX = todayCol * CONFIG.stride;
-                
-                // Centrera kolumnen i vyn
-                const targetX = colX - (scroller.clientWidth / 2) + (CONFIG.stride / 2);
-                
-                // 3. Utför scrollen
-                scroller.scrollLeft = targetX;
-                uiStore.scrolledToToday = true;
-            };
-
-            scrollToToday();
-        }
-    });
-
+    // --- ENDAST UPPDATERING AV STATE ---
     function handleScroll() {
         if (!uiStore.scroller) return;
         scrollLeft = uiStore.scroller.scrollLeft;
     }
+
+    // --- SCROLL TILL IDAG ---
+    $effect(() => {
+        if (uiStore.scroller && dataStore.data.length > 0 && !uiStore.scrolledToToday && containerWidth > 0) {
+            const todayItem = dataStore.data[dataStore.todayIndex];
+            if (todayItem) {
+                const colIndex = Math.floor(dataStore.todayIndex / layoutStore.rows);
+                const colX = colIndex * CONFIG.stride;
+                
+                // Målpositionen
+                const targetX = colX + layoutStore.centerOffset - (containerWidth / 2) + (CONFIG.stride / 2);
+
+                uiStore.scroller.scrollLeft = targetX;
+                scrollLeft = targetX; 
+                uiStore.scrolledToToday = true;
+            }
+        }
+    });
 </script>
 
 <div 
     class="scroll-view" 
     class:is-resizing={layoutStore.isResizing}
     bind:this={uiStore.scroller}
+    bind:clientWidth={containerWidth}
     onscroll={handleScroll}
-    bind:clientWidth={clientWidth} 
+    style:scroll-padding-left="{layoutStore.centerOffset}px" 
 >
     <div 
         class="grid-container" 
@@ -80,35 +69,15 @@
         <GridCanvas {renderStart} {renderEnd} />
         <GridOverlay {renderStart} {renderEnd} />
         <GridCells {renderStart} {renderEnd} />
+        <GraphLayer {renderStart} {renderEnd} /> 
     </div>
 </div>
 
 <style>
-    .scroll-view {
-        flex: 1;
-        overflow-x: auto;
-        overflow-y: hidden;
-        scroll-snap-type: x proximity; 
-        display: flex; 
-        align-items: flex-end;
-        -webkit-overflow-scrolling: touch; 
-        scrollbar-width: none;
-        position: relative;
-    }
-
-    .scroll-view.is-resizing {
-        scroll-snap-type: none;
-        overflow-x: hidden; 
-    }
-    
-    .scroll-view:active {
-        scroll-snap-type: none;
-    }
-
-    .grid-container { 
-        position: relative; 
-        flex-shrink: 0; 
-        box-sizing: content-box;
-        /* display: flex togs bort härifrån */
+    .is-resizing {
+        /* Stäng av snapping medan vi drar i storleken */
+        scroll-snap-type: none !important;
+        scroll-behavior: auto !important; 
+        cursor: ns-resize;
     }
 </style>

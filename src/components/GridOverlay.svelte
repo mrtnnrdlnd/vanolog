@@ -31,18 +31,17 @@
     .month-marker {
         position: absolute; display: flex; align-items: center; justify-content: center;
         pointer-events: none; z-index: 20; color: #999; font-size: 11px; font-weight: 600;
-        text-transform: uppercase; letter-spacing: 0.5px;
     }
-    
+
     .snap-guide {
         position: absolute;
-        top: 0;
-        bottom: 0;
-        
-        /* FIX: 'center' gör att kolumnen hamnar mitt på skärmen (och respekterar marginalerna) 
-           istället för att tvingas till vänsterkanten. */
-        scroll-snap-align: center; 
-        
+        top: 0; bottom: 0;
         pointer-events: none;
+
+        /* HÄR ÄR MAGIN: */
+        scroll-snap-align: start;
+        
+        /* Debug: Avkommentera nedan om du vill se linjerna du snappar mot */
+        /* border-left: 1px dashed red; opacity: 0.5; */
     }
 </style>
