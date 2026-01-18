@@ -1,7 +1,6 @@
-import type { GraphMode, GraphType, VisualStat } from '../types';
+import type { GraphMode, GraphType, Dataset } from '../types';
 import { dataStore } from './data.svelte';
 import { calculateLayout, type LayoutResult } from '../engine/layout-engine';
-import { calculateStat } from '../services/statistics';
 
 const STORAGE_KEY = 'calendar_settings_v1';
 
@@ -9,7 +8,8 @@ class LayoutStore {
     rows = $state(7);
     isResizing = $state(false);
     
-    graphMode = $state<GraphMode>('avg'); 
+    graphMode = $state<GraphMode>('avg');
+    graphType = $state<GraphType>('line');
     
     showGraph = $state(true);
     showHeatmap = $state(true);
@@ -39,7 +39,7 @@ class LayoutStore {
             this.rows, 
             this.screenW, 
             this.screenH, 
-            this.graphMode 
+            this.graphMode
         )
     );
 
@@ -51,61 +51,38 @@ class LayoutStore {
     totalCols = $derived(this.layoutCalc.totalCols);
     totalWidth = $derived(this.layoutCalc.totalWidth);
     
-    // --- VISUALS ---
+    // --- OPTIMERAD VISUALS ---
+    // Vi räknar INTE ut statistik här längre!
+    // Vi returnerar bara konfigurationen så att GraphLayer kan göra jobbet.
     visuals = $derived.by(() => {
         const resultLines: { 
             id: string, 
+            dataset: Dataset, // Vi skickar med hela datasetet
             color: string, 
             width: number, 
             graphType: GraphType, 
             graphMode: GraphMode,
-            showLine: boolean,
-            showMarkers: boolean,
-            markerSize: number,
-            markerOpacity: number,
-            stats: VisualStat[] 
+            showLine: boolean, 
+            showMarkers: boolean, 
+            markerSize: number, 
+            markerOpacity: number
         }[] = [];
 
         for (const ds of dataStore.datasets) {
             if (!ds.isVisible) continue;
-
-            // --- ÄNDRING: Skapa CSS-färg från Hue ---
-            // Vi använder 70% mättnad och 50% ljusstyrka för tydliga grafer
             const colorStr = `hsl(${ds.hue}, 70%, 50%)`;
-
-            const colCount = Math.ceil(ds.data.length / this.rows);
-            const stats: VisualStat[] = [];
-
-            for (let c = 0; c < colCount; c++) {
-                const startIdx = c * this.rows;
-                const colItems = [];
-                for (let r = 0; r < this.rows; r++) {
-                    const item = ds.data[startIdx + r];
-                    if (item && item.val !== null) colItems.push(item.val);
-                }
-
-                if (colItems.length > 0) {
-                    const val = calculateStat(colItems, ds.graphMode);
-                    stats.push({ val, hasData: val !== null });
-                } else {
-                    stats.push({ val: null, hasData: false });
-                }
-            }
             
             resultLines.push({ 
                 id: ds.id, 
-                
-                // Använd den beräknade färgen
+                dataset: ds, // Referens till datan
                 color: colorStr, 
-                
                 width: ds.width,
                 graphType: ds.graphType,
                 graphMode: ds.graphMode,
                 showLine: ds.showLine,
                 showMarkers: ds.showMarkers,
                 markerSize: ds.markerSize,
-                markerOpacity: ds.markerOpacity,
-                stats 
+                markerOpacity: ds.markerOpacity
             });
         }
 
@@ -115,21 +92,40 @@ class LayoutStore {
         };
     });
 
-    // ... (resten av klassen oförändrad) ...
-    updateDims() { this.screenH = window.innerHeight; this.screenW = window.innerWidth; }
+    updateDims() {
+        this.screenH = window.innerHeight;
+        this.screenW = window.innerWidth;
+    }
+
+    // --- SNABBARE DATA RANGE ---
+    // Kollar på rådata (oberoende av 'rows') = Inget lagg vid resize!
     dataRange = $derived.by(() => {
-        let allValues: number[] = [];
-        for (const line of this.visuals.lines) {
-            const valid = line.stats.filter(s => s.hasData && s.val !== null).map(s => s.val as number);
-            allValues = allValues.concat(valid);
+        let min = Infinity;
+        let max = -Infinity;
+        let hasData = false;
+
+        for (const ds of dataStore.datasets) {
+            if (!ds.isVisible) continue;
+            // Vi loopar rådata snabbt
+            for (const item of ds.data) {
+                if (item.val !== null) {
+                    if (item.val < min) min = item.val;
+                    if (item.val > max) max = item.val;
+                    hasData = true;
+                }
+            }
         }
-        if (!allValues.length) return { min: 0, max: 100 };
-        return { min: Math.min(...allValues), max: Math.max(...allValues) };
+        
+        if (!hasData) return { min: 0, max: 100 };
+        return { min, max };
     });
+
     dataMin = $derived(this.dataRange.min);
     dataMax = $derived(this.dataRange.max);
+
     graphMin = $derived(this.manualMin ?? (this.dataMin === this.dataMax ? this.dataMin - 10 : this.dataMin));
     graphMax = $derived(this.manualMax ?? (this.dataMin === this.dataMax ? this.dataMax + 10 : this.dataMax));
+
     getY(val: number | null) {
         if (val === null) return this.chartH - this.graphPadding.bottom;
         const range = this.graphMax - this.graphMin;
@@ -138,6 +134,12 @@ class LayoutStore {
         const normalized = (val - this.graphMin) / range;
         return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
+
+    setRows(newVal: number) {
+        const clamped = Math.max(4, Math.min(31, Math.round(newVal)));
+        this.rows = clamped;
+    }
+
     loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
@@ -145,6 +147,7 @@ class LayoutStore {
                 const parsed = JSON.parse(saved);
                 if (parsed.rows) this.rows = parsed.rows;
                 if (parsed.graphMode) this.graphMode = parsed.graphMode;
+                if (parsed.graphType) this.graphType = parsed.graphType;
                 if (parsed.showGraph !== undefined) this.showGraph = parsed.showGraph;
                 if (parsed.showHeatmap !== undefined) this.showHeatmap = parsed.showHeatmap;
                 if (parsed.showMonthLines !== undefined) this.showMonthLines = parsed.showMonthLines;
@@ -157,11 +160,13 @@ class LayoutStore {
             console.error("Kunde inte ladda inställningar", e);
         }
     }
+
     saveSettings = $effect.root(() => {
         $effect(() => {
             const settings = {
                 rows: this.rows,
                 graphMode: this.graphMode,
+                graphType: this.graphType,
                 showGraph: this.showGraph,
                 showHeatmap: this.showHeatmap,
                 showMonthLines: this.showMonthLines,
@@ -173,9 +178,11 @@ class LayoutStore {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         });
     });
+
     resetSettings() {
         this.rows = 7;
         this.graphMode = 'avg';
+        this.graphType = 'line';
         this.showGraph = true;
         this.showHeatmap = true;
         this.showMonthLines = true;

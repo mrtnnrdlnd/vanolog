@@ -1,9 +1,10 @@
-import type { CalendarData, GraphMode, MonthBound, ColumnStat } from '../types';
+import type { CalendarData, GraphMode, MonthBound } from '../types';
 import { CONFIG } from '../config/constants';
-import { calculateStat } from '../services/statistics';
+// Vi tar bort calculateStat härifrån för prestanda!
 import { createMonthPath } from '../services/geometry';
 
 // Retur-typen för layout-beräkningen
+// OBS: 'stats' är borttaget härifrån
 export interface LayoutResult {
     gridH: number;
     chartH: number;
@@ -12,7 +13,6 @@ export interface LayoutResult {
     xShift: number;
     totalCols: number;
     totalWidth: number;
-    stats: ColumnStat[];
     monthBounds: MonthBound[];
 }
 
@@ -36,15 +36,16 @@ export function calculateLayout(
     // 2. Beräkna kolumn-struktur
     const firstRealIndex = data.findIndex(d => d.day !== undefined);
     const colsToHide = firstRealIndex === -1 ? 0 : Math.floor(firstRealIndex / rows);
+    
+    // xShift justerar så att första datumet hamnar rätt i rutnätet
     const xShift = colsToHide * CONFIG.stride;
+    
     const totalCols = Math.ceil(data.length / rows);
     const totalWidth = (totalCols - colsToHide) * CONFIG.stride;
 
-    // 3. Loopa igenom data för att skapa statistik och månadslinjer
-    const stats: ColumnStat[] = [];
+    // 3. Loopa igenom data för att skapa månadslinjer (men INTE statistik)
     const monthBounds: MonthBound[] = [];
     const monthMap = new Map<string, MonthBound>();
-    let colValues: (number | null)[] = [];
     
     const gridFullBottom = chartH + gridH + CONFIG.footerHeight;
 
@@ -52,11 +53,9 @@ export function calculateLayout(
         const d = data[i];
         const rawCol = Math.floor(i / rows);
         const row = i % rows;
+        
         // visualCol är kolumnens index relativt skärmens vänsterkant (minus dolda kolumner)
         const visualCol = rawCol - (xShift / CONFIG.stride);
-
-        // Samla värden för statistik
-        if (d.day && d.val !== null) colValues.push(d.val);
 
         // Hantera månadsgruppering
         if (d.day) {
@@ -75,13 +74,9 @@ export function calculateLayout(
                 b.endRow = row;
             }
         }
-
-        // När en kolumn är slut (eller datat är slut), räkna ut stats
-        if ((i + 1) % rows === 0 || i === data.length - 1) {
-            const s = calculateStat(colValues, graphMode);
-            stats.push({ val: s ?? 0, hasData: s !== null });
-            colValues = [];
-        }
+        
+        // OBS: Vi hoppar över statistikberäkningen (calculateStat) helt här!
+        // Det görs nu "live" i GraphLayer istället.
     }
 
     // 4. Generera SVG-paths för månaderna
@@ -89,7 +84,7 @@ export function calculateLayout(
         b.pathD = createMonthPath(
             b.startCol, b.startRow, b.endCol, b.endRow, 
             CONFIG.stride, CONFIG.radius, 
-            chartH, gridFullBottom, rows
+            chartH, gridFullBottom, rows // Vi skickar med dina 9 argument
         );
     });
 
@@ -101,7 +96,6 @@ export function calculateLayout(
         xShift,
         totalCols,
         totalWidth,
-        stats,
         monthBounds
     };
 }
