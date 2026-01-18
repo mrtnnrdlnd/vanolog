@@ -7,26 +7,23 @@ class DataStore {
         {
             id: 'primary',
             name: 'Huvuddata',
-            color: '#00639b',
+            
+            // ÄNDRING: Hue 205 är den klassiska "Svelte-blå" vi kört med
+            hue: 205,
+            
             width: 3,
             graphType: 'line',
             graphMode: 'avg',
-            
-            // NYTT: Standard är att visa linjen
             showLine: true,
-            
             showMarkers: true,
             markerSize: 3.5,
             markerOpacity: 1.0,
-
             data: [],
             isVisible: true
         }
     ]);
 
     todayIndex = $state(0);
-
-    // Bakåtkompatibilitet
     data = $derived(this.datasets[0].data);
     totalCols = $derived(this.datasets[0].data.length > 0 ? Math.ceil(this.datasets[0].data.length / 7) : 0);
 
@@ -115,15 +112,16 @@ class DataStore {
         const original = this.datasets.find(d => d.id === id);
         if (!original) return;
         
-        // Shallow copy av datan för prestanda (delar objekt), 
-        // men ny array så man kan byta dataset helt om man vill senare.
         const newData = [...original.data]; 
 
         this.datasets.push({
             ...original,
             id: crypto.randomUUID(),
             name: `${original.name} (Kopia)`,
-            color: this.getRandomColor(),
+            
+            // ÄNDRING: Slumpa en hue (0-360) istället för hex
+            hue: Math.floor(Math.random() * 360),
+            
             data: newData,
             isVisible: true
         });
@@ -132,11 +130,6 @@ class DataStore {
     removeDataset(id: string) {
         if (this.datasets.length <= 1) return;
         this.datasets = this.datasets.filter(d => d.id !== id);
-    }
-
-    private getRandomColor() {
-        const colors = ['#d9534f', '#5cb85c', '#f0ad4e', '#5bc0de', '#563d7c', '#e83e8c'];
-        return colors[Math.floor(Math.random() * colors.length)];
     }
 }
 

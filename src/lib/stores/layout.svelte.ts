@@ -9,7 +9,6 @@ class LayoutStore {
     rows = $state(7);
     isResizing = $state(false);
     
-    // Global graphMode används nu mest för grid-beräkning om nödvändigt
     graphMode = $state<GraphMode>('avg'); 
     
     showGraph = $state(true);
@@ -60,19 +59,19 @@ class LayoutStore {
             width: number, 
             graphType: GraphType, 
             graphMode: GraphMode,
-            
-            // NYTT: showLine ingår här
             showLine: boolean,
-            
             showMarkers: boolean,
             markerSize: number,
             markerOpacity: number,
-
             stats: VisualStat[] 
         }[] = [];
 
         for (const ds of dataStore.datasets) {
             if (!ds.isVisible) continue;
+
+            // --- ÄNDRING: Skapa CSS-färg från Hue ---
+            // Vi använder 70% mättnad och 50% ljusstyrka för tydliga grafer
+            const colorStr = `hsl(${ds.hue}, 70%, 50%)`;
 
             const colCount = Math.ceil(ds.data.length / this.rows);
             const stats: VisualStat[] = [];
@@ -95,18 +94,17 @@ class LayoutStore {
             
             resultLines.push({ 
                 id: ds.id, 
-                color: ds.color, 
+                
+                // Använd den beräknade färgen
+                color: colorStr, 
+                
                 width: ds.width,
                 graphType: ds.graphType,
                 graphMode: ds.graphMode,
-                
-                // Mappa showLine från dataset till layout
                 showLine: ds.showLine,
-                
                 showMarkers: ds.showMarkers,
                 markerSize: ds.markerSize,
                 markerOpacity: ds.markerOpacity,
-
                 stats 
             });
         }
@@ -117,29 +115,21 @@ class LayoutStore {
         };
     });
 
-    updateDims() {
-        this.screenH = window.innerHeight;
-        this.screenW = window.innerWidth;
-    }
-
+    // ... (resten av klassen oförändrad) ...
+    updateDims() { this.screenH = window.innerHeight; this.screenW = window.innerWidth; }
     dataRange = $derived.by(() => {
         let allValues: number[] = [];
         for (const line of this.visuals.lines) {
-            const valid = line.stats
-                .filter(s => s.hasData && s.val !== null)
-                .map(s => s.val as number);
+            const valid = line.stats.filter(s => s.hasData && s.val !== null).map(s => s.val as number);
             allValues = allValues.concat(valid);
         }
         if (!allValues.length) return { min: 0, max: 100 };
         return { min: Math.min(...allValues), max: Math.max(...allValues) };
     });
-
     dataMin = $derived(this.dataRange.min);
     dataMax = $derived(this.dataRange.max);
-
     graphMin = $derived(this.manualMin ?? (this.dataMin === this.dataMax ? this.dataMin - 10 : this.dataMin));
     graphMax = $derived(this.manualMax ?? (this.dataMin === this.dataMax ? this.dataMax + 10 : this.dataMax));
-
     getY(val: number | null) {
         if (val === null) return this.chartH - this.graphPadding.bottom;
         const range = this.graphMax - this.graphMin;
@@ -148,7 +138,6 @@ class LayoutStore {
         const normalized = (val - this.graphMin) / range;
         return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
-
     loadSettings() {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
@@ -168,7 +157,6 @@ class LayoutStore {
             console.error("Kunde inte ladda inställningar", e);
         }
     }
-
     saveSettings = $effect.root(() => {
         $effect(() => {
             const settings = {
@@ -185,7 +173,6 @@ class LayoutStore {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         });
     });
-
     resetSettings() {
         this.rows = 7;
         this.graphMode = 'avg';

@@ -12,17 +12,14 @@ export interface CalendarData {
 export interface Dataset {
     id: string;
     name: string;
-    color: string;
-    width: number;
     
-    // Graf-typ och beräkning per dataset
+    // ÄNDRING: Vi använder hue (0-360) istället för hex-färg
+    hue: number; 
+    
+    width: number;
     graphType: GraphType;
     graphMode: GraphMode;
-
-    // --- NYTT: Visa/Dölj själva linjen ---
     showLine: boolean; 
-
-    // Markör-inställningar
     showMarkers: boolean;
     markerSize: number;
     markerOpacity: number;
@@ -41,13 +38,11 @@ export interface MonthBound {
     pathD: string;
 }
 
-// Denna behövs för layout-motorn
 export interface ColumnStat {
     val: number | null;
     hasData: boolean;
 }
 
-// Alias
 export type VisualStat = ColumnStat;
 
 export interface ApiDataItem {
