@@ -175,6 +175,42 @@
                             {@render selector('Graftyp', GRAPH_TYPES, layoutStore.graphType, (v) => layoutStore.graphType = v, 'flex')}
 
                             {@render selector('Beräkning', CALC_MODES, layoutStore.graphMode, (v) => layoutStore.graphMode = v, 'grid')}
+
+                            <div class="setting-group">
+                                <span class="group-label">Y-Axel (Manuell skala)</span>
+                                <div class="axis-inputs">
+                                    
+                                    <div class="input-col">
+                                        <span class="input-label">Min</span>
+                                        <input 
+                                            type="number" 
+                                            class="axis-input"
+                                            value={layoutStore.manualMin ?? ''}
+                                            placeholder={Math.round(layoutStore.dataMin).toString()}
+                                            oninput={(e) => {
+                                                const val = e.currentTarget.value;
+                                                layoutStore.manualMin = val === '' ? null : Number(val);
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div class="input-col">
+                                        <span class="input-label">Max</span>
+                                        <input 
+                                            type="number" 
+                                            class="axis-input"
+                                            value={layoutStore.manualMax ?? ''}
+                                            placeholder={Math.round(layoutStore.dataMax).toString()}
+                                            oninput={(e) => {
+                                                const val = e.currentTarget.value;
+                                                layoutStore.manualMax = val === '' ? null : Number(val);
+                                            }}
+                                        />
+                                    </div>
+
+                                </div>
+                                <p class="help-text" style:margin-top="6px">Lämna tomt för automatisk skala.</p>
+                            </div>
                         {/if}
                     </div>
                 {/snippet}
@@ -291,6 +327,54 @@
     .danger-btn:hover { background: rgba(255, 59, 48, 0.2); }
     .help-text { font-size: 12px; color: var(--text-muted); margin: 0; text-align: center; opacity: 0.8; }
 
+    /* --- NYTT: Axel-inputs styling --- */
+    .axis-inputs {
+        display: flex;
+        gap: 12px;
+    }
+    .input-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .input-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-weight: 500;
+        margin-left: 2px;
+    }
+    .axis-input {
+        width: 100%;
+        /* LÄGG TILL DETTA FÖR ATT FIXA BREDDEN: */
+        box-sizing: border-box; 
+        
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-card);
+        color: var(--text-main);
+        font-size: 14px;
+        font-weight: 500;
+        outline: none;
+        transition: all 0.2s;
+        appearance: textfield; 
+        -moz-appearance: textfield;
+    }
+    .axis-input::-webkit-outer-spin-button,
+    .axis-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .axis-input:focus {
+        border-color: #00639b;
+        box-shadow: 0 0 0 3px rgba(0, 99, 155, 0.1);
+    }
+    .axis-input::placeholder {
+        color: var(--text-muted);
+        opacity: 0.5;
+    }
+
     /* --- DARK MODE --- */
     :global(body.dark-mode) .section-item { border-color: #333; }
     :global(body.dark-mode) .section-header:hover { background: #252525; }
@@ -300,4 +384,12 @@
     :global(body.dark-mode) .toggle-switch { background: #444; }
     :global(body.dark-mode) .toggle-switch.active { background: #00639b; }
     :global(body.dark-mode) .selector-container { background: rgba(255,255,255,0.1); }
+    
+    :global(body.dark-mode) .axis-input {
+        background: rgba(255,255,255,0.05);
+    }
+    :global(body.dark-mode) .axis-input:focus {
+        border-color: #4fc3f7;
+        box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.15);
+    }
 </style>

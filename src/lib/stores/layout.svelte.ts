@@ -21,6 +21,7 @@ class LayoutStore {
     screenH = $state(800);
     screenW = $state(400);
     
+    // Manual overrides for Y-axis
     manualMin = $state<number | null>(null);
     manualMax = $state<number | null>(null);
 
@@ -34,9 +35,7 @@ class LayoutStore {
         }
     }
 
-    // --- LAYOUT ENGINE (Kärnan i förändringen) ---
-    // All tung matematik sker nu i layout-engine.ts
-    // Vi skickar bara in datat och får tillbaka färdiga koordinater.
+    // --- LAYOUT ENGINE ---
     layoutCalc = $derived<LayoutResult>(
         calculateLayout(
             dataStore.data, 
@@ -48,7 +47,6 @@ class LayoutStore {
     );
 
     // --- GETTERS (Proxies till motorns resultat) ---
-    // Dessa används av komponenterna precis som förut, så vi behöver inte ändra i Grid.svelte
     gridH = $derived(this.layoutCalc.gridH);
     chartH = $derived(this.layoutCalc.chartH);
     centerOffset = $derived(this.layoutCalc.centerOffset);
@@ -57,12 +55,10 @@ class LayoutStore {
     totalCols = $derived(this.layoutCalc.totalCols);
     totalWidth = $derived(this.layoutCalc.totalWidth);
     
-    // Visuals objektet (stats & monthBounds)
     visuals = $derived({
         stats: this.layoutCalc.stats,
         monthBounds: this.layoutCalc.monthBounds
     });
-
 
     // --- UTILITIES & STORAGE ---
     
@@ -71,24 +67,37 @@ class LayoutStore {
         this.screenW = window.innerWidth;
     }
 
-    // Data Range & Scaling
+    // --- DATA RANGE CALCULATION (Updated) ---
+    // Calculates the min/max of the *current view's data* (e.g., daily averages)
+    // This is what we show as "Auto" placeholders in settings.
     dataRange = $derived.by(() => {
-        const valid = dataStore.data
-            .map(d => d.val)
-            .filter((v): v is number => v !== null && v !== undefined && !isNaN(v));
+        // Use visuals.stats instead of raw data to match what the graph actually shows
+        const valid = this.visuals.stats
+            .filter(s => s.hasData && s.val !== null)
+            .map(s => s.val as number);
         
         if (!valid.length) return { min: 0, max: 100 };
         return { min: Math.min(...valid), max: Math.max(...valid) };
     });
 
-    graphMin = $derived(this.manualMin ?? (this.dataRange.min === this.dataRange.max ? this.dataRange.min - 10 : this.dataRange.min));
-    graphMax = $derived(this.manualMax ?? (this.dataRange.min === this.dataRange.max ? this.dataRange.max + 10 : this.dataRange.max));
+    // Explicit getters for Settings.svelte to use
+    dataMin = $derived(this.dataRange.min);
+    dataMax = $derived(this.dataRange.max);
+
+    // --- GRAPH SCALING ---
+    // Determines the actual Y-axis range used for rendering
+    graphMin = $derived(this.manualMin ?? (this.dataMin === this.dataMax ? this.dataMin - 10 : this.dataMin));
+    graphMax = $derived(this.manualMax ?? (this.dataMin === this.dataMax ? this.dataMax + 10 : this.dataMax));
 
     getY(val: number) {
+        if (val === null) return this.chartH - this.graphPadding.bottom;
+        
         const range = this.graphMax - this.graphMin;
         if (range <= 0) return this.chartH - this.graphPadding.bottom;
+        
         const usableHeight = this.chartH - this.graphPadding.top - this.graphPadding.bottom;
         const normalized = (val - this.graphMin) / range;
+        
         return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
 
@@ -112,6 +121,25 @@ class LayoutStore {
             console.error("Kunde inte ladda inställningar", e);
         }
     }
+
+    // Effect to save settings whenever they change
+    saveSettings = $effect.root(() => {
+        $effect(() => {
+            const settings = {
+                rows: this.rows,
+                graphMode: this.graphMode,
+                graphType: this.graphType,
+                showGraph: this.showGraph,
+                showHeatmap: this.showHeatmap,
+                showMonthLines: this.showMonthLines,
+                darkMode: this.darkMode,
+                heatmapHue: this.heatmapHue,
+                manualMin: this.manualMin,
+                manualMax: this.manualMax
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        });
+    });
 
     resetSettings() {
         this.rows = 7;
