@@ -9,6 +9,15 @@ export interface CalendarData {
     dateStr?: string;
 }
 
+// --- NYTT: Interface för Dataset ---
+export interface Dataset {
+    id: string;
+    name: string;
+    color: string;
+    data: CalendarData[];
+    isVisible: boolean;
+}
+
 export interface MonthBound {
     startCol: number;
     startRow: number;
@@ -21,6 +30,12 @@ export interface MonthBound {
 
 export interface ColumnStat {
     val: number;
+    hasData: boolean;
+}
+
+// Helper för layout-store (används för graferna)
+export interface VisualStat {
+    val: number | null;
     hasData: boolean;
 }
 
@@ -43,4 +58,3 @@ export interface GoogleApiItem {
 
 export type GraphMode = 'avg' | 'median' | 'max' | 'min' | 'all';
 export type GraphType = 'line' | 'bar';
-

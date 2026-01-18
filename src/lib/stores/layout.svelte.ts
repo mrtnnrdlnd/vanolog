@@ -1,13 +1,14 @@
-import type { GraphMode, GraphType } from '../types';
+import type { GraphMode, GraphType, VisualStat } from '../types';
 import { dataStore } from './data.svelte';
 import { calculateLayout, type LayoutResult } from '../engine/layout-engine';
+import { calculateStat } from '../services/statistics';
 
 const STORAGE_KEY = 'calendar_settings_v1';
 
 class LayoutStore {
-    // --- STATE (Inställningar & Variabler) ---
+    // --- STATE ---
     rows = $state(7);
-    isResizing = $state(false); // Används av Grid.svelte för ankring
+    isResizing = $state(false);
     
     graphMode = $state<GraphMode>('avg');
     graphType = $state<GraphType>('line');
@@ -21,7 +22,6 @@ class LayoutStore {
     screenH = $state(800);
     screenW = $state(400);
     
-    // Manual overrides for Y-axis
     manualMin = $state<number | null>(null);
     manualMax = $state<number | null>(null);
 
@@ -46,7 +46,7 @@ class LayoutStore {
         )
     );
 
-    // --- GETTERS (Proxies till motorns resultat) ---
+    // --- GETTERS ---
     gridH = $derived(this.layoutCalc.gridH);
     chartH = $derived(this.layoutCalc.chartH);
     centerOffset = $derived(this.layoutCalc.centerOffset);
@@ -55,41 +55,73 @@ class LayoutStore {
     totalCols = $derived(this.layoutCalc.totalCols);
     totalWidth = $derived(this.layoutCalc.totalWidth);
     
-    visuals = $derived({
-        stats: this.layoutCalc.stats,
-        monthBounds: this.layoutCalc.monthBounds
+    // --- VISUALS (Aggregering för FLERA datasets) ---
+    visuals = $derived.by(() => {
+        const resultLines: { id: string, color: string, stats: VisualStat[] }[] = [];
+
+        for (const ds of dataStore.datasets) {
+            if (!ds.isVisible) continue;
+
+            const colCount = Math.ceil(ds.data.length / this.rows);
+            const stats: VisualStat[] = [];
+
+            for (let c = 0; c < colCount; c++) {
+                const startIdx = c * this.rows;
+                const colItems = [];
+                
+                for (let r = 0; r < this.rows; r++) {
+                    const item = ds.data[startIdx + r];
+                    if (item && item.val !== null) {
+                        colItems.push(item.val);
+                    }
+                }
+
+                if (colItems.length > 0) {
+                    const val = calculateStat(colItems, this.graphMode);
+                    stats.push({ val, hasData: val !== null });
+                } else {
+                    stats.push({ val: null, hasData: false });
+                }
+            }
+            resultLines.push({ id: ds.id, color: ds.color, stats });
+        }
+
+        return { 
+            lines: resultLines,
+            monthBounds: this.layoutCalc.monthBounds 
+        };
     });
 
-    // --- UTILITIES & STORAGE ---
-    
+    // --- UTILITIES ---
     updateDims() {
         this.screenH = window.innerHeight;
         this.screenW = window.innerWidth;
     }
 
-    // --- DATA RANGE CALCULATION (Updated) ---
-    // Calculates the min/max of the *current view's data* (e.g., daily averages)
-    // This is what we show as "Auto" placeholders in settings.
+    // --- DATA RANGE ---
     dataRange = $derived.by(() => {
-        // Use visuals.stats instead of raw data to match what the graph actually shows
-        const valid = this.visuals.stats
-            .filter(s => s.hasData && s.val !== null)
-            .map(s => s.val as number);
+        let allValues: number[] = [];
+
+        for (const line of this.visuals.lines) {
+            const valid = line.stats
+                .filter(s => s.hasData && s.val !== null)
+                .map(s => s.val as number);
+            allValues = allValues.concat(valid);
+        }
         
-        if (!valid.length) return { min: 0, max: 100 };
-        return { min: Math.min(...valid), max: Math.max(...valid) };
+        if (!allValues.length) return { min: 0, max: 100 };
+        return { min: Math.min(...allValues), max: Math.max(...allValues) };
     });
 
-    // Explicit getters for Settings.svelte to use
     dataMin = $derived(this.dataRange.min);
     dataMax = $derived(this.dataRange.max);
 
     // --- GRAPH SCALING ---
-    // Determines the actual Y-axis range used for rendering
     graphMin = $derived(this.manualMin ?? (this.dataMin === this.dataMax ? this.dataMin - 10 : this.dataMin));
     graphMax = $derived(this.manualMax ?? (this.dataMin === this.dataMax ? this.dataMax + 10 : this.dataMax));
 
-    getY(val: number) {
+    // ÄNDRING HÄR: Tillåt number | null
+    getY(val: number | null) {
         if (val === null) return this.chartH - this.graphPadding.bottom;
         
         const range = this.graphMax - this.graphMin;
@@ -122,7 +154,6 @@ class LayoutStore {
         }
     }
 
-    // Effect to save settings whenever they change
     saveSettings = $effect.root(() => {
         $effect(() => {
             const settings = {

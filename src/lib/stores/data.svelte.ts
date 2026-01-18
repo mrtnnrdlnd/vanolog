@@ -1,16 +1,52 @@
 import { api } from '../api';
-import type { CalendarData, ApiDataItem } from '../types';
+import type { CalendarData, ApiDataItem, Dataset } from '../types';
 import { uiStore } from './ui.svelte';
 
 class DataStore {
-    data = $state<CalendarData[]>([]);
+    // --- NYTT: Datasets array istället för en platt data-array ---
+    datasets = $state<Dataset[]>([
+        {
+            id: 'primary',
+            name: 'Huvuddata',
+            color: '#00639b',
+            data: [],
+            isVisible: true
+        },
+        // En demo-dataset för att visa funktionaliteten
+        {
+            id: 'demo',
+            name: 'Målvärde (Demo)',
+            color: '#d9534f', // Röd
+            data: [],
+            isVisible: false
+        }
+    ]);
+
     todayIndex = $state(0);
+
+    // --- COMPUTED: Bakåtkompatibilitet ---
+    // Heatmapen och logiken använder alltid det första datasetet
+    data = $derived(this.datasets[0].data);
+    
+    // Totala antalet kolumner baseras på primärdata
+    totalCols = $derived(this.datasets[0].data.length > 0 ? Math.ceil(this.datasets[0].data.length / 7) : 0);
 
     async init() {
         uiStore.loading = true;
         try {
             const raw = await api.getSheetData();
-            this.processApiData(raw);
+            
+            // Bearbeta huvuddata
+            const processedPrimary = this.processApiData(raw);
+            this.datasets[0].data = processedPrimary;
+
+            // --- SKAPA DEMO DATA (Bara för exempel) ---
+            // Skapar en kopia som ligger lite högre
+            this.datasets[1].data = processedPrimary.map(d => ({
+                ...d,
+                val: d.val !== null ? d.val + 5 : null // Lägger på 5 på värdet
+            }));
+
         } catch (e) {
             console.error("Load failed", e);
             uiStore.syncStatus = 'error';
@@ -19,11 +55,11 @@ class DataStore {
         }
     }
 
-    private processApiData(rawItems: ApiDataItem[]) {
+    private processApiData(rawItems: ApiDataItem[]): CalendarData[] {
         // Skapa Map för snabb uppslagning
         const dataMap = new Map(rawItems.map(item => [`${item.year}-${item.monthIdx}-${item.day}`, item.val]));
         
-        // Sortering och datum-fyllnad (samma logik som förut, men inkapslad)
+        // Sortering
         let sorted = rawItems.sort((a,b) => 
             new Date(a.year, a.monthIdx, a.day).getTime() - new Date(b.year, b.monthIdx, b.day).getTime()
         );
@@ -65,11 +101,12 @@ class DataStore {
                 dateStr: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
             };
         }
-        this.data = newData;
+        return newData;
     }
 
     async updateValue(idx: number, newVal: number | null) {
-        const item = this.data[idx];
+        // Vi uppdaterar bara primärdata vid editering
+        const item = this.datasets[0].data[idx];
         if (!item || !item.dateStr) return;
 
         item.val = newVal; // Optimistisk update
@@ -81,6 +118,12 @@ class DataStore {
         } catch (e) {
             uiStore.syncStatus = 'error';
         }
+    }
+
+    // --- NYTT: Toggle funktion ---
+    toggleDataset(id: string) {
+        const ds = this.datasets.find(d => d.id === id);
+        if (ds) ds.isVisible = !ds.isVisible;
     }
 }
 
