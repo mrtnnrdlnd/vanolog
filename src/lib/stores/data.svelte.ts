@@ -131,6 +131,21 @@ class DataStore {
         if (this.datasets.length <= 1) return;
         this.datasets = this.datasets.filter(d => d.id !== id);
     }
+
+    moveDataset(id: string, direction: 'up' | 'down') {
+        const index = this.datasets.findIndex(d => d.id === id);
+        if (index === -1) return;
+
+        if (direction === 'up' && index > 0) {
+            // Byt plats med den ovanför
+            [this.datasets[index - 1], this.datasets[index]] = 
+            [this.datasets[index], this.datasets[index - 1]];
+        } else if (direction === 'down' && index < this.datasets.length - 1) {
+            // Byt plats med den under
+            [this.datasets[index + 1], this.datasets[index]] = 
+            [this.datasets[index], this.datasets[index + 1]];
+        }
+    }
 }
 
 export const dataStore = new DataStore();

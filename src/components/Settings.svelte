@@ -6,7 +6,6 @@
     import { CONFIG } from '../lib/config/constants';
     import type { Snippet } from 'svelte';
     
-    // Importera komponenterna
     import DatasetCard from './settings/DatasetCard.svelte';
     import Toggle from './settings/controls/Toggle.svelte';
     import RangeSlider from './settings/controls/RangeSlider.svelte';
@@ -33,9 +32,7 @@
         <button class="section-header {expandedSection === id ? 'active' : ''}" onclick={() => toggleSection(id)}>
             <span class="section-title">{title}</span>
             <div class="chevron-box" style:transform={expandedSection === id ? 'rotate(180deg)' : 'rotate(0deg)'}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
         </button>
         {#if expandedSection === id}
@@ -51,33 +48,26 @@
         class="settings-backdrop" 
         style:top="{CONFIG.titleBarHeight}px" 
         onclick={close} 
-        role="button" 
-        tabindex="0" 
-        onkeydown={(e) => e.key === 'Escape' && close()} 
+        role="button" tabindex="0" onkeydown={(e) => e.key === 'Escape' && close()} 
         transition:fade={{ duration: 200 }}
     >
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div 
             class="settings-panel" 
             onclick={(e) => e.stopPropagation()} 
-            role="document" 
-            tabindex="0" 
-            onkeydown={(e) => e.stopPropagation()} 
+            role="document" tabindex="0" onkeydown={(e) => e.stopPropagation()} 
             transition:fly={TRANS_PANEL}
         >
             <div class="panel-scroll-area">
                 
                 {#snippet datasetsContent()}
-                    <div class="content-stack">
-                        <p class="help-text" style:text-align="left" style:margin-bottom="8px">
-                            Konfigurera grafer och markörer.
-                        </p>
+                    <div class="dataset-list">
                         {#each dataStore.datasets as ds, i (ds.id)}
                             <DatasetCard 
                                 bind:dataset={dataStore.datasets[i]} 
                                 isEditing={editingDatasetId === ds.id}
                                 onToggleEdit={() => editingDatasetId = editingDatasetId === ds.id ? null : ds.id}
+                                index={i}
+                                totalCount={dataStore.datasets.length}
                             />
                         {/each}
                     </div>
@@ -93,54 +83,28 @@
                         
                         <div class="setting-group" style:margin-top="12px">
                             <span class="group-label">Rader per kolumn ({layoutStore.rows})</span>
-                            
-                            <RangeSlider 
-                                min={4} 
-                                max={31} 
-                                step={1} 
-                                bind:value={layoutStore.rows} 
-                            />
-                            
-                            <p class="help-text" style:text-align="left; margin-top:8px">
-                                Standard är 7 (en vecka).
-                            </p>
+                            <RangeSlider min={4} max={31} step={1} bind:value={layoutStore.rows} />
+                            <p class="help-text" style:text-align="left; margin-top:8px">Standard är 7 (en vecka).</p>
                         </div>
-                        
-                        </div>
+                    </div>
                 {/snippet}
                 {@render section('appearance', 'Utseende', appearanceContent)}
+
 
                 {#snippet graphContent()}
                     <div class="content-stack">
                         <Toggle label="Visa Graf" checked={layoutStore.showGraph} onChange={(v) => layoutStore.showGraph = v} />
-
                         {#if layoutStore.showGraph}
                             <div class="setting-group">
                                 <span class="group-label">Y-Axel (Manuell skala)</span>
                                 <div class="axis-inputs">
                                     <div class="input-col">
                                         <span class="input-label">Min</span>
-                                        <input 
-                                            type="number" class="axis-input"
-                                            value={layoutStore.manualMin ?? ''}
-                                            placeholder={Math.round(layoutStore.dataMin).toString()}
-                                            oninput={(e) => {
-                                                const val = e.currentTarget.value;
-                                                layoutStore.manualMin = val === '' ? null : Number(val);
-                                            }}
-                                        />
+                                        <input type="number" class="axis-input" value={layoutStore.manualMin ?? ''} placeholder={Math.round(layoutStore.dataMin).toString()} oninput={(e) => { const val = e.currentTarget.value; layoutStore.manualMin = val === '' ? null : Number(val); }} />
                                     </div>
                                     <div class="input-col">
                                         <span class="input-label">Max</span>
-                                        <input 
-                                            type="number" class="axis-input"
-                                            value={layoutStore.manualMax ?? ''}
-                                            placeholder={Math.round(layoutStore.dataMax).toString()}
-                                            oninput={(e) => {
-                                                const val = e.currentTarget.value;
-                                                layoutStore.manualMax = val === '' ? null : Number(val);
-                                            }}
-                                        />
+                                        <input type="number" class="axis-input" value={layoutStore.manualMax ?? ''} placeholder={Math.round(layoutStore.dataMax).toString()} oninput={(e) => { const val = e.currentTarget.value; layoutStore.manualMax = val === '' ? null : Number(val); }} />
                                     </div>
                                 </div>
                                 <p class="help-text" style:margin-top="6px">Lämna tomt för automatisk skala.</p>
@@ -168,6 +132,8 @@
     .settings-panel { background: var(--bg-card, #fff); width: 320px; height: 100%; box-shadow: -10px 0 40px rgba(0,0,0,0.15); display: flex; flex-direction: column; color: var(--text-main, #333); border-left: 1px solid var(--border-color); }
     .panel-scroll-area { flex: 1; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; }
     
+    .dataset-list { display: flex; flex-direction: column; gap: 8px; }
+
     .section-item { border-bottom: 1px solid var(--border-color, #f0f0f0); }
     .section-header { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; background: transparent; border: none; cursor: pointer; color: var(--text-main); font-size: 15px; font-weight: 500; transition: background 0.2s; }
     .section-header:hover { background: var(--bg-input, #fafafa); }
