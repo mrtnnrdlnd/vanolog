@@ -9,7 +9,7 @@
     // Importera komponenterna
     import DatasetCard from './settings/DatasetCard.svelte';
     import Toggle from './settings/controls/Toggle.svelte';
-    import HueSlider from './settings/controls/HueSlider.svelte';
+    import RangeSlider from './settings/controls/RangeSlider.svelte';
 
     let { isOpen = $bindable(false) } = $props();
     let expandedSection = $state<string | null>('datasets');
@@ -56,6 +56,8 @@
         onkeydown={(e) => e.key === 'Escape' && close()} 
         transition:fade={{ duration: 200 }}
     >
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div 
             class="settings-panel" 
             onclick={(e) => e.stopPropagation()} 
@@ -89,13 +91,22 @@
                         <Toggle label="Heatmap" checked={layoutStore.showHeatmap} onChange={(v) => layoutStore.showHeatmap = v} />
                         <Toggle label="Månadsgränser" checked={layoutStore.showMonthLines} onChange={(v) => layoutStore.showMonthLines = v} />
                         
-                        {#if layoutStore.showHeatmap}
-                            <div class="setting-group">
-                                <span class="group-label">Färgton (Heatmap)</span>
-                                <HueSlider bind:hue={layoutStore.heatmapHue} isDark={layoutStore.darkMode} />
-                            </div>
-                        {/if}
-                    </div>
+                        <div class="setting-group" style:margin-top="12px">
+                            <span class="group-label">Rader per kolumn ({layoutStore.rows})</span>
+                            
+                            <RangeSlider 
+                                min={4} 
+                                max={31} 
+                                step={1} 
+                                bind:value={layoutStore.rows} 
+                            />
+                            
+                            <p class="help-text" style:text-align="left; margin-top:8px">
+                                Standard är 7 (en vecka).
+                            </p>
+                        </div>
+                        
+                        </div>
                 {/snippet}
                 {@render section('appearance', 'Utseende', appearanceContent)}
 

@@ -1,10 +1,7 @@
 import type { CalendarData, GraphMode, MonthBound } from '../types';
 import { CONFIG } from '../config/constants';
-// Vi tar bort calculateStat härifrån för prestanda!
 import { createMonthPath } from '../services/geometry';
 
-// Retur-typen för layout-beräkningen
-// OBS: 'stats' är borttaget härifrån
 export interface LayoutResult {
     gridH: number;
     chartH: number;
@@ -14,12 +11,9 @@ export interface LayoutResult {
     totalCols: number;
     totalWidth: number;
     monthBounds: MonthBound[];
+    // OBS: 'stats' är borttaget härifrån för att fixa lagget!
 }
 
-/**
- * En ren funktion som räknar ut all geometri för kalendern.
- * Inget Svelte-state här, bara input -> output.
- */
 export function calculateLayout(
     data: CalendarData[],
     rows: number,
@@ -37,13 +31,11 @@ export function calculateLayout(
     const firstRealIndex = data.findIndex(d => d.day !== undefined);
     const colsToHide = firstRealIndex === -1 ? 0 : Math.floor(firstRealIndex / rows);
     
-    // xShift justerar så att första datumet hamnar rätt i rutnätet
     const xShift = colsToHide * CONFIG.stride;
-    
     const totalCols = Math.ceil(data.length / rows);
     const totalWidth = (totalCols - colsToHide) * CONFIG.stride;
 
-    // 3. Loopa igenom data för att skapa månadslinjer (men INTE statistik)
+    // 3. Månadslinjer (Men INGEN statistik-loop)
     const monthBounds: MonthBound[] = [];
     const monthMap = new Map<string, MonthBound>();
     
@@ -53,11 +45,8 @@ export function calculateLayout(
         const d = data[i];
         const rawCol = Math.floor(i / rows);
         const row = i % rows;
-        
-        // visualCol är kolumnens index relativt skärmens vänsterkant (minus dolda kolumner)
         const visualCol = rawCol - (xShift / CONFIG.stride);
 
-        // Hantera månadsgruppering
         if (d.day) {
             const mKey = `${d.year}-${d.monthIdx}`;
             if (!monthMap.has(mKey)) {
@@ -74,28 +63,19 @@ export function calculateLayout(
                 b.endRow = row;
             }
         }
-        
-        // OBS: Vi hoppar över statistikberäkningen (calculateStat) helt här!
-        // Det görs nu "live" i GraphLayer istället.
     }
 
-    // 4. Generera SVG-paths för månaderna
+    // 4. Generera SVG-paths
     monthBounds.forEach(b => {
         b.pathD = createMonthPath(
             b.startCol, b.startRow, b.endCol, b.endRow, 
             CONFIG.stride, CONFIG.radius, 
-            chartH, gridFullBottom, rows // Vi skickar med dina 9 argument
+            chartH, gridFullBottom, rows
         );
     });
 
     return {
-        gridH,
-        chartH,
-        centerOffset,
-        colsToHide,
-        xShift,
-        totalCols,
-        totalWidth,
-        monthBounds
+        gridH, chartH, centerOffset, colsToHide, xShift,
+        totalCols, totalWidth, monthBounds
     };
 }

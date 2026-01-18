@@ -20,8 +20,70 @@
 </div>
 
 <style>
-    .hue-wrapper { display: flex; align-items: center; gap: 12px; }
-    .hue-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
-    .hue-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); border: 1px solid rgba(0,0,0,0.05); transform: scale(1); transition: transform 0.1s; }
-    .hue-preview { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); }
+    .hue-wrapper { 
+        display: flex; 
+        align-items: center; 
+        gap: 12px; 
+    }
+
+    .hue-slider { 
+        flex: 1; 
+        -webkit-appearance: none; 
+        appearance: none; 
+        height: 6px; 
+        border-radius: 3px; 
+        outline: none; 
+        cursor: pointer; 
+        margin: 0;
+    }
+
+    /* --- Thumb (Handtaget) - Standardiserad design --- */
+    .hue-slider::-webkit-slider-thumb { 
+        -webkit-appearance: none; 
+        appearance: none;
+        width: 16px; 
+        height: 16px; 
+        border-radius: 50%; 
+        background: #fff; 
+        border: 1px solid rgba(0,0,0,0.1); 
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3); 
+        cursor: pointer; 
+        transition: transform 0.1s; 
+        transform: scale(1); 
+    }
+
+    .hue-slider:active::-webkit-slider-thumb {
+        transform: scale(1.1);
+    }
+
+    .hue-slider::-moz-range-thumb {
+        width: 16px; 
+        height: 16px; 
+        border-radius: 50%; 
+        background: #fff; 
+        border: 1px solid rgba(0,0,0,0.1); 
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3); 
+        cursor: pointer; 
+        transition: transform 0.1s;
+    }
+
+    .hue-preview { 
+        width: 24px; 
+        height: 24px; 
+        border-radius: 50%; 
+        border: 1px solid rgba(0,0,0,0.1); 
+    }
+
+    /* Dark mode */
+    :global(body.dark-mode) .hue-slider::-webkit-slider-thumb {
+        background: #eee;
+        border-color: #333;
+    }
+    :global(body.dark-mode) .hue-slider::-moz-range-thumb {
+        background: #eee;
+        border-color: #333;
+    }
+    :global(body.dark-mode) .hue-preview {
+        border-color: rgba(255,255,255,0.2);
+    }
 </style>
