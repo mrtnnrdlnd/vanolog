@@ -6,12 +6,13 @@ import { calculateStat } from '../services/statistics';
 const STORAGE_KEY = 'calendar_settings_v1';
 
 class LayoutStore {
-    // --- STATE ---
     rows = $state(7);
     isResizing = $state(false);
     
-    graphMode = $state<GraphMode>('avg');
-    graphType = $state<GraphType>('line');
+    // OBS: Global graphMode/graphType är borta eller används bara som fallback
+    // Vi behåller dem i koden om layout-engine behöver dem för grid-beräkning,
+    // men för graf-ritning använder vi datasetets värden.
+    graphMode = $state<GraphMode>('avg'); // Används primärt för Grid-färgning nu
     
     showGraph = $state(true);
     showHeatmap = $state(true);
@@ -35,18 +36,16 @@ class LayoutStore {
         }
     }
 
-    // --- LAYOUT ENGINE ---
     layoutCalc = $derived<LayoutResult>(
         calculateLayout(
             dataStore.data, 
             this.rows, 
             this.screenW, 
             this.screenH, 
-            this.graphMode
+            this.graphMode 
         )
     );
 
-    // --- GETTERS ---
     gridH = $derived(this.layoutCalc.gridH);
     chartH = $derived(this.layoutCalc.chartH);
     centerOffset = $derived(this.layoutCalc.centerOffset);
@@ -55,9 +54,17 @@ class LayoutStore {
     totalCols = $derived(this.layoutCalc.totalCols);
     totalWidth = $derived(this.layoutCalc.totalWidth);
     
-    // --- VISUALS (Aggregering för FLERA datasets) ---
+    // --- VISUALS ---
     visuals = $derived.by(() => {
-        const resultLines: { id: string, color: string, stats: VisualStat[] }[] = [];
+        // Vi skickar nu med graphType och graphMode från datasetet
+        const resultLines: { 
+            id: string, 
+            color: string, 
+            width: number, 
+            graphType: GraphType, // NYTT
+            graphMode: GraphMode, // NYTT
+            stats: VisualStat[] 
+        }[] = [];
 
         for (const ds of dataStore.datasets) {
             if (!ds.isVisible) continue;
@@ -77,13 +84,22 @@ class LayoutStore {
                 }
 
                 if (colItems.length > 0) {
-                    const val = calculateStat(colItems, this.graphMode);
+                    // VIKTIGT: Använd ds.graphMode här, inte this.graphMode
+                    const val = calculateStat(colItems, ds.graphMode);
                     stats.push({ val, hasData: val !== null });
                 } else {
                     stats.push({ val: null, hasData: false });
                 }
             }
-            resultLines.push({ id: ds.id, color: ds.color, stats });
+            
+            resultLines.push({ 
+                id: ds.id, 
+                color: ds.color, 
+                width: ds.width,
+                graphType: ds.graphType,
+                graphMode: ds.graphMode,
+                stats 
+            });
         }
 
         return { 
@@ -92,23 +108,19 @@ class LayoutStore {
         };
     });
 
-    // --- UTILITIES ---
     updateDims() {
         this.screenH = window.innerHeight;
         this.screenW = window.innerWidth;
     }
 
-    // --- DATA RANGE ---
     dataRange = $derived.by(() => {
         let allValues: number[] = [];
-
         for (const line of this.visuals.lines) {
             const valid = line.stats
                 .filter(s => s.hasData && s.val !== null)
                 .map(s => s.val as number);
             allValues = allValues.concat(valid);
         }
-        
         if (!allValues.length) return { min: 0, max: 100 };
         return { min: Math.min(...allValues), max: Math.max(...allValues) };
     });
@@ -116,20 +128,15 @@ class LayoutStore {
     dataMin = $derived(this.dataRange.min);
     dataMax = $derived(this.dataRange.max);
 
-    // --- GRAPH SCALING ---
     graphMin = $derived(this.manualMin ?? (this.dataMin === this.dataMax ? this.dataMin - 10 : this.dataMin));
     graphMax = $derived(this.manualMax ?? (this.dataMin === this.dataMax ? this.dataMax + 10 : this.dataMax));
 
-    // ÄNDRING HÄR: Tillåt number | null
     getY(val: number | null) {
         if (val === null) return this.chartH - this.graphPadding.bottom;
-        
         const range = this.graphMax - this.graphMin;
         if (range <= 0) return this.chartH - this.graphPadding.bottom;
-        
         const usableHeight = this.chartH - this.graphPadding.top - this.graphPadding.bottom;
         const normalized = (val - this.graphMin) / range;
-        
         return (this.chartH - this.graphPadding.bottom) - (normalized * usableHeight);
     }
 
@@ -139,8 +146,9 @@ class LayoutStore {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.rows) this.rows = parsed.rows;
+                // graphMode/graphType sparas inte globalt på samma sätt längre
+                // men vi laddar dem för gridens skull
                 if (parsed.graphMode) this.graphMode = parsed.graphMode;
-                if (parsed.graphType) this.graphType = parsed.graphType;
                 if (parsed.showGraph !== undefined) this.showGraph = parsed.showGraph;
                 if (parsed.showHeatmap !== undefined) this.showHeatmap = parsed.showHeatmap;
                 if (parsed.showMonthLines !== undefined) this.showMonthLines = parsed.showMonthLines;
@@ -159,7 +167,6 @@ class LayoutStore {
             const settings = {
                 rows: this.rows,
                 graphMode: this.graphMode,
-                graphType: this.graphType,
                 showGraph: this.showGraph,
                 showHeatmap: this.showHeatmap,
                 showMonthLines: this.showMonthLines,
@@ -167,6 +174,7 @@ class LayoutStore {
                 heatmapHue: this.heatmapHue,
                 manualMin: this.manualMin,
                 manualMax: this.manualMax
+                // Datasets sparas inte här, de borde sparas i dataStore eller separat
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         });
@@ -175,7 +183,6 @@ class LayoutStore {
     resetSettings() {
         this.rows = 7;
         this.graphMode = 'avg';
-        this.graphType = 'line';
         this.showGraph = true;
         this.showHeatmap = true;
         this.showMonthLines = true;

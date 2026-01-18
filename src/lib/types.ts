@@ -9,11 +9,14 @@ export interface CalendarData {
     dateStr?: string;
 }
 
-// --- NYTT: Interface för Dataset ---
 export interface Dataset {
     id: string;
     name: string;
     color: string;
+    width: number;
+    // Dessa styr nu utseendet per dataset
+    graphType: GraphType;
+    graphMode: GraphMode;
     data: CalendarData[];
     isVisible: boolean;
 }
@@ -23,21 +26,19 @@ export interface MonthBound {
     startRow: number;
     endCol: number;
     endRow: number;
-    y: number; // Årtal
-    m: number; // Månadsindex
+    y: number;
+    m: number;
     pathD: string;
 }
 
+// FIX: Denna saknades
 export interface ColumnStat {
-    val: number;
-    hasData: boolean;
-}
-
-// Helper för layout-store (används för graferna)
-export interface VisualStat {
     val: number | null;
     hasData: boolean;
 }
+
+// Alias för tydlighet (används i layout-store)
+export type VisualStat = ColumnStat;
 
 export interface ApiDataItem {
     year: number;
@@ -48,9 +49,9 @@ export interface ApiDataItem {
 }
 
 export interface GoogleApiItem {
-    y: number;          // year
+    y: number;
     monthIdx: number;
-    d: number;          // day
+    d: number;
     val: number | null;
     val2?: number | null;
     isToday: boolean;

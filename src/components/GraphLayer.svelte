@@ -2,11 +2,11 @@
     import { layoutStore } from '../lib/stores/layout.svelte';
     import { dataStore } from '../lib/stores/data.svelte';
     import { CONFIG } from '../lib/config/constants';
-    import type { VisualStat } from '../lib/types'; // Bra att importera typen
+    import type { VisualStat } from '../lib/types';
 
     let { renderStart, renderEnd } = $props<{ renderStart: number, renderEnd: number }>();
 
-    // Funktion för att skapa path för en specifik "line" (aggregerad data)
+    // Generell path-generator (Line)
     function getSummaryPath(stats: VisualStat[]) {
         const offset = layoutStore.colsToHide;
         const maxVisualIndex = Math.max(0, stats.length - offset);
@@ -18,12 +18,10 @@
 
         for (let i = start; i < end; i++) {
             const stat = stats[i + offset];
-            // ÄNDRING: Explicit check för val !== null
             if (!stat || !stat.hasData || stat.val === null) continue;
 
             const xBase = i * CONFIG.stride;
             const xLine = xBase + (CONFIG.stride / 2);
-            // ÄNDRING: 'as number' för att lugna TypeScript
             const y = layoutStore.getY(stat.val as number);
 
             if (first) {
@@ -36,7 +34,7 @@
         return d;
     }
 
-    // Funktion för detaljerad tidslinje ('all' mode) för ett specifikt dataset
+    // Detaljerad tidslinje (All data points)
     function getDetailedPath(datasetId: string) {
         const ds = dataStore.datasets.find(d => d.id === datasetId);
         if (!ds) return '';
@@ -52,14 +50,12 @@
 
         for (let i = startIndex; i < endIndex; i++) {
             if (i >= ds.data.length) break;
-            
             const item = ds.data[i];
             if (!item || item.val === null) continue;
 
             const rawCol = Math.floor(i / layoutStore.rows);
             const rowInCol = i % layoutStore.rows;
             const visualCol = rawCol - layoutStore.colsToHide;
-            
             const x = (visualCol * CONFIG.stride) + (rowInCol * stepX) + (stepX / 2);
             const y = layoutStore.getY(item.val);
 
@@ -79,23 +75,23 @@
         
         {#each layoutStore.visuals.lines as line (line.id)}
             
-            {#if layoutStore.graphMode === 'all'}
+            {#if line.graphMode === 'all'}
                 <path 
                     d={getDetailedPath(line.id)} 
                     fill="none" 
                     stroke={line.color} 
-                    stroke-width="1.5" 
+                    stroke-width={Math.max(1, line.width - 1)} 
                     stroke-linejoin="round"
                     vector-effect="non-scaling-stroke"
                 />
 
-            {:else if layoutStore.graphType === 'line'}
+            {:else if line.graphType === 'line'}
                 {@const pathD = getSummaryPath(line.stats)}
                 <path 
                     d={pathD} 
                     fill="none" 
                     stroke={line.color} 
-                    stroke-width="2.5" 
+                    stroke-width={line.width} 
                     stroke-linecap="round" 
                     stroke-linejoin="round" 
                 />
@@ -107,35 +103,33 @@
                             {#if stat && stat.hasData && stat.val !== null}
                                 {@const xLine = idx * CONFIG.stride + (CONFIG.stride / 2)}
                                 {@const y = layoutStore.getY(stat.val as number)}
-                                <circle cx={xLine} cy={y} r="3.5" fill="#fff" stroke={line.color} stroke-width="2.5" />
+                                <circle cx={xLine} cy={y} r="3.5" fill="#fff" stroke={line.color} stroke-width={line.width} />
                             {/if}
                         {/if}
                     {/each}
                 {/if}
 
             {:else}
-                {#if line.id === 'primary'}
-                    {#each line.stats as stat, i}
-                        {@const idx = i - layoutStore.colsToHide}
-                        {#if idx >= renderStart - 1 && idx <= renderEnd + 1}
-                            {#if stat && stat.hasData && stat.val !== null}
-                                {@const xBase = idx * CONFIG.stride}
-                                {@const margin = 2}
-                                {@const y = layoutStore.getY(stat.val as number)}
-                                {@const yBottom = layoutStore.chartH - layoutStore.graphPadding.bottom}
-                                <rect 
-                                    x={xBase + margin} 
-                                    y={y} 
-                                    width={CONFIG.stride - (margin * 2)} 
-                                    height={yBottom - y} 
-                                    fill={line.color} 
-                                    rx="2"
-                                    opacity="0.8"
-                                />
-                            {/if}
+                {#each line.stats as stat, i}
+                    {@const idx = i - layoutStore.colsToHide}
+                    {#if idx >= renderStart - 1 && idx <= renderEnd + 1}
+                        {#if stat && stat.hasData && stat.val !== null}
+                            {@const xBase = idx * CONFIG.stride}
+                            {@const margin = 2}
+                            {@const y = layoutStore.getY(stat.val as number)}
+                            {@const yBottom = layoutStore.chartH - layoutStore.graphPadding.bottom}
+                            <rect 
+                                x={xBase + margin} 
+                                y={y} 
+                                width={CONFIG.stride - (margin * 2)} 
+                                height={yBottom - y} 
+                                fill={line.color} 
+                                rx="2"
+                                opacity="0.8"
+                            />
                         {/if}
-                    {/each}
-                {/if}
+                    {/if}
+                {/each}
             {/if}
 
         {/each}
