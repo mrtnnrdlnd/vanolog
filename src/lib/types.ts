@@ -14,9 +14,19 @@ export interface Dataset {
     name: string;
     color: string;
     width: number;
-    // Dessa styr nu utseendet per dataset
+    
+    // Graf-typ och beräkning per dataset
     graphType: GraphType;
     graphMode: GraphMode;
+
+    // --- NYTT: Visa/Dölj själva linjen ---
+    showLine: boolean; 
+
+    // Markör-inställningar
+    showMarkers: boolean;
+    markerSize: number;
+    markerOpacity: number;
+    
     data: CalendarData[];
     isVisible: boolean;
 }
@@ -31,13 +41,13 @@ export interface MonthBound {
     pathD: string;
 }
 
-// FIX: Denna saknades
+// Denna behövs för layout-motorn
 export interface ColumnStat {
     val: number | null;
     hasData: boolean;
 }
 
-// Alias för tydlighet (används i layout-store)
+// Alias
 export type VisualStat = ColumnStat;
 
 export interface ApiDataItem {

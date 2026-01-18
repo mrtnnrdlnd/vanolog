@@ -6,7 +6,6 @@
 
     let { renderStart, renderEnd } = $props<{ renderStart: number, renderEnd: number }>();
 
-    // Generell path-generator (Line)
     function getSummaryPath(stats: VisualStat[]) {
         const offset = layoutStore.colsToHide;
         const maxVisualIndex = Math.max(0, stats.length - offset);
@@ -34,7 +33,6 @@
         return d;
     }
 
-    // Detaljerad tidslinje (All data points)
     function getDetailedPath(datasetId: string) {
         const ds = dataStore.datasets.find(d => d.id === datasetId);
         if (!ds) return '';
@@ -76,34 +74,48 @@
         {#each layoutStore.visuals.lines as line (line.id)}
             
             {#if line.graphMode === 'all'}
-                <path 
-                    d={getDetailedPath(line.id)} 
-                    fill="none" 
-                    stroke={line.color} 
-                    stroke-width={Math.max(1, line.width - 1)} 
-                    stroke-linejoin="round"
-                    vector-effect="non-scaling-stroke"
-                />
+                {#if line.showLine}
+                    <path 
+                        d={getDetailedPath(line.id)} 
+                        fill="none" 
+                        stroke={line.color} 
+                        stroke-width={Math.max(1, line.width - 1)} 
+                        stroke-linejoin="round"
+                        vector-effect="non-scaling-stroke"
+                    />
+                {/if}
 
             {:else if line.graphType === 'line'}
                 {@const pathD = getSummaryPath(line.stats)}
-                <path 
-                    d={pathD} 
-                    fill="none" 
-                    stroke={line.color} 
-                    stroke-width={line.width} 
-                    stroke-linecap="round" 
-                    stroke-linejoin="round" 
-                />
                 
-                {#if line.id === 'primary'}
+                {#if line.showLine}
+                    <path 
+                        d={pathD} 
+                        fill="none" 
+                        stroke={line.color} 
+                        stroke-width={line.width} 
+                        stroke-linecap="round" 
+                        stroke-linejoin="round" 
+                    />
+                {/if}
+                
+                {#if line.showMarkers}
                     {#each line.stats as stat, i}
                         {@const idx = i - layoutStore.colsToHide}
                         {#if idx >= renderStart - 1 && idx <= renderEnd + 1}
                             {#if stat && stat.hasData && stat.val !== null}
                                 {@const xLine = idx * CONFIG.stride + (CONFIG.stride / 2)}
                                 {@const y = layoutStore.getY(stat.val as number)}
-                                <circle cx={xLine} cy={y} r="3.5" fill="#fff" stroke={line.color} stroke-width={line.width} />
+                                
+                                <circle 
+                                    cx={xLine} 
+                                    cy={y} 
+                                    r={line.markerSize} 
+                                    fill="#fff" 
+                                    stroke={line.color} 
+                                    stroke-width={line.width} 
+                                    opacity={line.markerOpacity}
+                                />
                             {/if}
                         {/if}
                     {/each}

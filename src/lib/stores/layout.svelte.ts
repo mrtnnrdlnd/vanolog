@@ -9,10 +9,8 @@ class LayoutStore {
     rows = $state(7);
     isResizing = $state(false);
     
-    // OBS: Global graphMode/graphType är borta eller används bara som fallback
-    // Vi behåller dem i koden om layout-engine behöver dem för grid-beräkning,
-    // men för graf-ritning använder vi datasetets värden.
-    graphMode = $state<GraphMode>('avg'); // Används primärt för Grid-färgning nu
+    // Global graphMode används nu mest för grid-beräkning om nödvändigt
+    graphMode = $state<GraphMode>('avg'); 
     
     showGraph = $state(true);
     showHeatmap = $state(true);
@@ -56,13 +54,20 @@ class LayoutStore {
     
     // --- VISUALS ---
     visuals = $derived.by(() => {
-        // Vi skickar nu med graphType och graphMode från datasetet
         const resultLines: { 
             id: string, 
             color: string, 
             width: number, 
-            graphType: GraphType, // NYTT
-            graphMode: GraphMode, // NYTT
+            graphType: GraphType, 
+            graphMode: GraphMode,
+            
+            // NYTT: showLine ingår här
+            showLine: boolean,
+            
+            showMarkers: boolean,
+            markerSize: number,
+            markerOpacity: number,
+
             stats: VisualStat[] 
         }[] = [];
 
@@ -75,16 +80,12 @@ class LayoutStore {
             for (let c = 0; c < colCount; c++) {
                 const startIdx = c * this.rows;
                 const colItems = [];
-                
                 for (let r = 0; r < this.rows; r++) {
                     const item = ds.data[startIdx + r];
-                    if (item && item.val !== null) {
-                        colItems.push(item.val);
-                    }
+                    if (item && item.val !== null) colItems.push(item.val);
                 }
 
                 if (colItems.length > 0) {
-                    // VIKTIGT: Använd ds.graphMode här, inte this.graphMode
                     const val = calculateStat(colItems, ds.graphMode);
                     stats.push({ val, hasData: val !== null });
                 } else {
@@ -98,6 +99,14 @@ class LayoutStore {
                 width: ds.width,
                 graphType: ds.graphType,
                 graphMode: ds.graphMode,
+                
+                // Mappa showLine från dataset till layout
+                showLine: ds.showLine,
+                
+                showMarkers: ds.showMarkers,
+                markerSize: ds.markerSize,
+                markerOpacity: ds.markerOpacity,
+
                 stats 
             });
         }
@@ -146,8 +155,6 @@ class LayoutStore {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (parsed.rows) this.rows = parsed.rows;
-                // graphMode/graphType sparas inte globalt på samma sätt längre
-                // men vi laddar dem för gridens skull
                 if (parsed.graphMode) this.graphMode = parsed.graphMode;
                 if (parsed.showGraph !== undefined) this.showGraph = parsed.showGraph;
                 if (parsed.showHeatmap !== undefined) this.showHeatmap = parsed.showHeatmap;
@@ -174,7 +181,6 @@ class LayoutStore {
                 heatmapHue: this.heatmapHue,
                 manualMin: this.manualMin,
                 manualMax: this.manualMax
-                // Datasets sparas inte här, de borde sparas i dataStore eller separat
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
         });

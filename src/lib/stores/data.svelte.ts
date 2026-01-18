@@ -11,6 +11,14 @@ class DataStore {
             width: 3,
             graphType: 'line',
             graphMode: 'avg',
+            
+            // NYTT: Standard är att visa linjen
+            showLine: true,
+            
+            showMarkers: true,
+            markerSize: 3.5,
+            markerOpacity: 1.0,
+
             data: [],
             isVisible: true
         }
@@ -82,12 +90,9 @@ class DataStore {
     }
 
     async updateValue(idx: number, newVal: number | null) {
-        // Uppdaterar alla datasets som delar samma källdata (förenklat: vi uppdaterar bara index 0 nu och låter andra kloner vara kopior)
-        // I en full implementation borde datasets peka på en gemensam "Source", men detta funkar för nu.
         const item = this.datasets[0].data[idx];
         if (!item || !item.dateStr) return;
 
-        // Uppdatera alla datasets som har data (för att hålla dem synkade visuellt direkt)
         this.datasets.forEach(ds => {
             if (ds.data[idx]) ds.data[idx].val = newVal;
         });
@@ -106,32 +111,31 @@ class DataStore {
         if (ds) ds.isVisible = !ds.isVisible;
     }
 
-    // --- NYTT: Klona dataset ---
     cloneDataset(id: string) {
         const original = this.datasets.find(d => d.id === id);
         if (!original) return;
+        
+        // Shallow copy av datan för prestanda (delar objekt), 
+        // men ny array så man kan byta dataset helt om man vill senare.
+        const newData = [...original.data]; 
 
-        const newId = crypto.randomUUID();
-        // Skapa en djup kopia av arrayen om du vill att de ska vara oberoende (eller referens om de ska vara länkade)
-        // Här gör vi en referenskopia av datan för prestanda, men oberoende inställningar.
         this.datasets.push({
             ...original,
-            id: newId,
+            id: crypto.randomUUID(),
             name: `${original.name} (Kopia)`,
             color: this.getRandomColor(),
+            data: newData,
             isVisible: true
         });
     }
 
-    // --- NYTT: Ta bort dataset ---
     removeDataset(id: string) {
-        // Förhindra att ta bort det sista datasetet
         if (this.datasets.length <= 1) return;
         this.datasets = this.datasets.filter(d => d.id !== id);
     }
 
     private getRandomColor() {
-        const colors = ['#d9534f', '#5cb85c', '#f0ad4e', '#5bc0de', '#563d7c'];
+        const colors = ['#d9534f', '#5cb85c', '#f0ad4e', '#5bc0de', '#563d7c', '#e83e8c'];
         return colors[Math.floor(Math.random() * colors.length)];
     }
 }
